@@ -1,0 +1,138 @@
+
+============================================================
+Investigation Run: 2025-12-22 00:10:26
+============================================================
+Anastruct Package Version: Unknown
+Anastruct File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/anastruct/__init__.py
+
+Initialized SystemElements()
+Adding dummy element and supports...
+  - Added spring support via add_support_spring(translation=1).
+
+--- SystemElements Attributes Inspection ---
+element_map                    | Type: dict       | Value: {1: <anastruct.fem.elements.Element object at 0x731c5bc0cd40>}
+id_last_element                | Type: int        | Value: 1
+id_last_node                   | Type: int        | Value: 2
+load_factor                    | Type: float      | Value: 1.0
+loads_dead_load                | Type: set        | Value: {1}
+loads_moment                   | Type: dict       | Value: {}
+loads_point                    | Type: dict       | Value: {}
+loads_q                        | Type: dict       | Value: {}
+node_element_map               | Type: dict       | Value: {1: [<anastruct.fem.elements.Element object at 0x731c5bc0cd40>], 2: [<anastruct.fem.elements.Element object at 0x731c5bc0cd40>]}
+node_map                       | Type: dict       | Value: {1: <anastruct.fem.node.Node object at 0x731c31f1d940>, 2: <anastruct.fem.node.Node object at 0x731c59b1c620>}
+non_linear_elements            | Type: dict       | Value: {}
+supports_fixed                 | Type: list       | Value: []
+supports_hinged                | Type: list       | Value: [<anastruct.fem.node.Node object at 0x731c31f1d940>]
+supports_roll                  | Type: list       | Value: [<anastruct.fem.node.Node object at 0x731c59b1c620>]
+supports_roll_direction        | Type: list       | Value: [2]
+supports_roll_rotate           | Type: list       | Value: [True]
+supports_rotational            | Type: list       | Value: []
+supports_spring_args           | Type: list       | Value: [(1, 1, 1000, False)]
+supports_spring_x              | Type: list       | Value: [(<anastruct.fem.node.Node object at 0x731c31f1d940>, False)]
+supports_spring_y              | Type: list       | Value: []
+supports_spring_z              | Type: list       | Value: []
+system_spring_map              | Type: dict       | Value: {0: 1000}
+
+--- End of Log ---
+
+============================================================
+Investigation Run: 2025-12-22 00:44:08
+============================================================
+Anastruct Package Version: Unknown
+Anastruct File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/anastruct/__init__.py
+
+Initialized SystemElements()
+--- Model Setup ---
+  - Added spring support via add_support_spring(translation=1).
+
+--- Object Inspection ---
+Element Object (ID 1) Attributes:
+  EA                  : float
+  EI                  : float
+  N_1                 : NoneType
+  N_2                 : NoneType
+  a1                  : float
+  a2                  : float
+  all_qn_load         : list
+  all_qp_load         : list
+  angle               : float
+  axial_force         : NoneType
+  bending_moment      : NoneType
+  constitutive_matrix : ndarray
+  dead_load           : int
+  deflection          : NoneType
+  element_displacement_vector: ndarray
+  element_force_vector: ndarray
+  element_primary_force_vector: ndarray
+  extension           : NoneType
+  hinges              : list
+  id                  : int
+  kinematic_matrix    : ndarray
+  l                   : float
+  max_deflection      : NoneType
+  max_extension       : NoneType
+  max_total_deflection: NoneType
+  node_1              : Node
+  node_2              : Node
+  node_id1            : int
+  node_id2            : int
+  node_map            : dict
+  nodes_plastic       : list
+  q_angle             : NoneType
+  q_direction         : NoneType
+  q_load              : tuple
+  q_perp_load         : tuple
+  section_name        : str
+  shear_force         : NoneType
+  springs             : dict
+  stiffness_matrix    : ndarray
+  total_deflection    : NoneType
+  type                : str
+  vertex_1            : Vertex
+  vertex_2            : Vertex
+
+Node Object (ID 1) Attributes:
+  Fx                  : float
+  Fy                  : float
+  Fy_neg              : float
+  Tz                  : float
+  elements            : dict
+  hinge               : bool
+  id                  : int
+  phi_z               : float
+  ux                  : float
+  uy                  : float
+  vertex              : Vertex
+
+--- Method Signatures ---
+add_element         : (location: Union[Sequence[ForwardRef('VertexLike')], ForwardRef('VertexLike')], EA: Optional[float] = None, EI: Optional[float] = None, g: float = 0, mp: Optional[ForwardRef('MpType')] = None, spring: Optional[ForwardRef('Spring')] = None, **kwargs: Any) -> int
+add_support_spring  : (node_id: Union[Sequence[int], int], translation: Union[Sequence[ForwardRef('AxisNumber')], ForwardRef('AxisNumber')], k: Union[Sequence[float], float], roll: Union[Sequence[bool], bool] = False) -> None
+q_load              : (q: Union[float, Sequence[float]], element_id: Union[int, Sequence[int]], direction: Union[ForwardRef('LoadDirection'), Sequence[ForwardRef('LoadDirection')]] = 'element', rotation: Union[float, Sequence[float], NoneType] = None, q_perp: Union[float, Sequence[float], NoneType] = None) -> None
+point_load          : (node_id: Union[int, Sequence[int]], Fx: Union[float, Sequence[float]] = 0.0, Fy: Union[float, Sequence[float]] = 0.0, rotation: Union[float, Sequence[float]] = 0.0, Fz: Union[float, Sequence[float], NoneType] = None) -> None
+solve               : (force_linear: bool = False, verbosity: int = 0, max_iter: int = 200, geometrical_non_linear: int = False, **kwargs: Any) -> numpy.ndarray
+
+--- SystemElements Attributes Inspection ---
+element_map                    | Type: dict       | Value: {1: <anastruct.fem.elements.Element object at 0x702cea1d7d10>}
+id_last_element                | Type: int        | Value: 1
+id_last_node                   | Type: int        | Value: 2
+load_factor                    | Type: float      | Value: 1.0
+loads_dead_load                | Type: set        | Value: {1}
+loads_moment                   | Type: dict       | Value: {}
+loads_point                    | Type: dict       | Value: {}
+loads_q                        | Type: dict       | Value: {}
+node_element_map               | Type: dict       | Value: {1: [<anastruct.fem.elements.Element object at 0x702cea1d7d10>], 2: [<anastruct.fem.elements.Element object at 0x702cea1d7d10>]}
+node_map                       | Type: dict       | Value: {1: <anastruct.fem.node.Node object at 0x702ceb92ff50>, 2: <anastruct.fem.node.Node object at 0x702cea12d8e0>}
+non_linear_elements            | Type: dict       | Value: {}
+supports_fixed                 | Type: list       | Value: []
+supports_hinged                | Type: list       | Value: [<anastruct.fem.node.Node object at 0x702ceb92ff50>]
+supports_roll                  | Type: list       | Value: [<anastruct.fem.node.Node object at 0x702cea12d8e0>]
+supports_roll_direction        | Type: list       | Value: [2]
+supports_roll_rotate           | Type: list       | Value: [True]
+supports_rotational            | Type: list       | Value: []
+supports_spring_args           | Type: list       | Value: [(1, 1, 1000, False)]
+supports_spring_x              | Type: list       | Value: [(<anastruct.fem.node.Node object at 0x702ceb92ff50>, False)]
+supports_spring_y              | Type: list       | Value: []
+supports_spring_z              | Type: list       | Value: []
+system_spring_map              | Type: dict       | Value: {0: 1000}
+
+--- End of Log ---
