@@ -1,0 +1,613 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Examples &mdash; anaStruct 1.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        
+    
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Saving" href="saving.html" /> 
+
+<!-- RTD Extra Head -->
+
+
+
+<script type="application/json" id="READTHEDOCS_DATA">{"ad_free": false, "api_host": "https://readthedocs.org", "build_date": "2023-02-24T00:47:35Z", "builder": "sphinx", "canonical_url": null, "commit": "f03aa282", "docroot": "/doc/source/", "features": {"docsearch_disabled": false}, "global_analytics_code": "UA-17997319-1", "language": "en", "page": "examples", "programming_language": "py", "project": "anastruct", "proxied_api_host": "/_", "source_suffix": ".rst", "subprojects": {}, "theme": "sphinx_rtd_theme", "user_analytics_code": "", "version": "latest"}</script>
+
+<!--
+Using this variable directly instead of using `JSON.parse` is deprecated.
+The READTHEDOCS_DATA global variable will be removed in the future.
+-->
+<script type="text/javascript">
+READTHEDOCS_DATA = JSON.parse(document.getElementById('READTHEDOCS_DATA').innerHTML);
+</script>
+
+
+
+<!-- end RTD <extrahead> -->
+<script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="anastruct" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/examples.html" /><meta name="readthedocs-http-status" content="200" /></head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="index.html" class="icon icon-home"> anaStruct
+          
+
+          
+          </a>
+
+          
+            
+            
+            
+              <div class="version">
+                latest
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elements.html">Elements</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supports.html">Supports</a></li>
+<li class="toctree-l1"><a class="reference internal" href="loads.html">Loads</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plotting.html">Plotting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="calculation.html">Calculation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="loadcases.html">Load cases and load combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="post_processing.html">Post processing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="element_node_interaction.html">Element/ node interaction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="vertex.html">Vertex</a></li>
+<li class="toctree-l1"><a class="reference internal" href="saving.html">Saving</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Examples</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#simple-example-truss">Simple example - Truss</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#intermediate">Intermediate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#advanced">Advanced</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">anaStruct</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Examples</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/ritchie46/anaStruct/blob/master/doc/source/examples.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Permalink to this heading">¶</a></h1>
+<p>Examples below a side variety of the structures which aim to show capabilities of the package. The same as any other packages, anaStruct should be called and imported.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">anastruct</span> <span class="k">as</span> <span class="nn">anas</span>
+</pre></div>
+</div>
+<p>And for a mater of minimalism and making calls and coding more efficient, different classes can be called separately.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">1</span><span class="n">anas</span><span class="o">.</span><span class="n">LoadCase</span>
+<span class="linenos">2</span><span class="n">anas</span><span class="o">.</span><span class="n">LoadCombination</span>
+<span class="linenos">3</span><span class="n">anas</span><span class="o">.</span><span class="n">SystemElements</span>
+<span class="linenos">4</span><span class="n">anas</span><span class="o">.</span><span class="n">Vertex</span>
+</pre></div>
+</div>
+<section id="simple-example-truss">
+<h2>Simple example - Truss<a class="headerlink" href="#simple-example-truss" title="Permalink to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="n">ss</span> <span class="o">=</span> <span class="n">SystemElements</span><span class="p">(</span><span class="n">EA</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
+<span class="linenos"> 2</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">]])</span>
+<span class="linenos"> 3</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">]])</span>
+<span class="linenos"> 4</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="p">[[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">]])</span>
+<span class="linenos"> 5</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">]],</span> <span class="n">EA</span><span class="o">=</span><span class="mi">5000</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+<span class="linenos"> 6</span>
+<span class="linenos"> 7</span><span class="n">ss</span><span class="o">.</span><span class="n">add_support_hinged</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="linenos"> 8</span><span class="n">ss</span><span class="o">.</span><span class="n">add_support_hinged</span><span class="p">(</span><span class="n">node_id</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<span class="linenos"> 9</span>
+<span class="linenos">10</span><span class="n">ss</span><span class="o">.</span><span class="n">point_load</span><span class="p">(</span><span class="n">Fx</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">node_id</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="linenos">11</span>
+<span class="linenos">12</span><span class="n">ss</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+<span class="linenos">13</span><span class="n">ss</span><span class="o">.</span><span class="n">show_structure</span><span class="p">()</span>
+<span class="linenos">14</span><span class="n">ss</span><span class="o">.</span><span class="n">show_reaction_force</span><span class="p">()</span>
+<span class="linenos">15</span><span class="n">ss</span><span class="o">.</span><span class="n">show_axial_force</span><span class="p">()</span>
+<span class="linenos">16</span><span class="n">ss</span><span class="o">.</span><span class="n">show_displacement</span><span class="p">(</span><span class="n">factor</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<img alt="_images/truss_struct.png" src="_images/truss_struct.png" />
+<img alt="_images/truss_react.png" src="_images/truss_react.png" />
+<img alt="_images/truss_axial.png" src="_images/truss_axial.png" />
+<img alt="_images/truss_displa.png" src="_images/truss_displa.png" />
+</section>
+</section>
+<section id="intermediate">
+<h1>Intermediate<a class="headerlink" href="#intermediate" title="Permalink to this heading">¶</a></h1>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="kn">from</span> <span class="nn">anastruct</span> <span class="kn">import</span> <span class="n">SystemElements</span>
+<span class="linenos"> 2</span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="linenos"> 3</span>
+<span class="linenos"> 4</span><span class="n">ss</span> <span class="o">=</span> <span class="n">SystemElements</span><span class="p">()</span>
+<span class="linenos"> 5</span><span class="n">element_type</span> <span class="o">=</span> <span class="s1">&#39;truss&#39;</span>
+<span class="linenos"> 6</span>
+<span class="linenos"> 7</span><span class="c1"># Create 2 towers</span>
+<span class="linenos"> 8</span><span class="n">width</span> <span class="o">=</span> <span class="mi">6</span>
+<span class="linenos"> 9</span><span class="n">span</span> <span class="o">=</span> <span class="mi">30</span>
+<span class="linenos">10</span><span class="n">k</span> <span class="o">=</span> <span class="mf">5e3</span>
+<span class="linenos">11</span>
+<span class="linenos">12</span><span class="c1"># create triangles</span>
+<span class="linenos">13</span><span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">pi</span>
+<span class="linenos">14</span><span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">y</span><span class="p">)</span> <span class="o">*</span> <span class="n">width</span> <span class="o">*</span> <span class="mf">0.5</span>
+<span class="linenos">15</span><span class="n">x</span> <span class="o">-=</span> <span class="n">x</span><span class="o">.</span><span class="n">min</span><span class="p">()</span>
+<span class="linenos">16</span>
+<span class="linenos">17</span><span class="k">for</span> <span class="n">length</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">span</span><span class="p">]:</span>
+<span class="linenos">18</span>    <span class="n">x_left_column</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">y</span><span class="p">[::</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="n">x</span><span class="o">.</span><span class="n">min</span><span class="p">()</span> <span class="o">+</span> <span class="n">length</span>
+<span class="linenos">19</span>    <span class="n">x_right_column</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">y</span><span class="p">[::</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">x</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">+</span> <span class="n">length</span>
+<span class="linenos">20</span>
+<span class="linenos">21</span>    <span class="c1"># add triangles</span>
+<span class="linenos">22</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_element_grid</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">length</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">element_type</span><span class="o">=</span><span class="n">element_type</span><span class="p">)</span>
+<span class="linenos">23</span>    <span class="c1"># add vertical elements</span>
+<span class="linenos">24</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_element_grid</span><span class="p">(</span><span class="n">x_left_column</span><span class="p">,</span> <span class="n">y</span><span class="p">[::</span><span class="mi">2</span><span class="p">],</span> <span class="n">element_type</span><span class="o">=</span><span class="n">element_type</span><span class="p">)</span>
+<span class="linenos">25</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_element_grid</span><span class="p">(</span><span class="n">x_right_column</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">r_</span><span class="p">[</span><span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">::</span><span class="mi">2</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]],</span> <span class="n">element_type</span><span class="o">=</span><span class="n">element_type</span><span class="p">)</span>
+<span class="linenos">26</span>
+<span class="linenos">27</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_spring</span><span class="p">(</span>
+<span class="linenos">28</span>        <span class="n">node_id</span><span class="o">=</span><span class="n">ss</span><span class="o">.</span><span class="n">find_node_id</span><span class="p">(</span><span class="n">vertex</span><span class="o">=</span><span class="p">[</span><span class="n">x_left_column</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">]]),</span>
+<span class="linenos">29</span>        <span class="n">translation</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="linenos">30</span>        <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
+<span class="linenos">31</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_spring</span><span class="p">(</span>
+<span class="linenos">32</span>        <span class="n">node_id</span><span class="o">=</span><span class="n">ss</span><span class="o">.</span><span class="n">find_node_id</span><span class="p">(</span><span class="n">vertex</span><span class="o">=</span><span class="p">[</span><span class="n">x_right_column</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">]]),</span>
+<span class="linenos">33</span>        <span class="n">translation</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+<span class="linenos">34</span>        <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
+<span class="linenos">35</span>
+<span class="linenos">36</span><span class="c1"># add top girder</span>
+<span class="linenos">37</span><span class="n">ss</span><span class="o">.</span><span class="n">add_element_grid</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">span</span><span class="p">,</span> <span class="n">span</span> <span class="o">+</span> <span class="n">width</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">EI</span><span class="o">=</span><span class="mf">10e3</span><span class="p">)</span>
+<span class="linenos">38</span>
+<span class="linenos">39</span><span class="c1"># Add stability elements at the bottom.</span>
+<span class="linenos">40</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">min</span><span class="p">()],</span> <span class="p">[</span><span class="n">width</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">min</span><span class="p">()]])</span>
+<span class="linenos">41</span><span class="n">ss</span><span class="o">.</span><span class="n">add_truss_element</span><span class="p">([[</span><span class="n">span</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">min</span><span class="p">()],</span> <span class="p">[</span><span class="n">span</span> <span class="o">+</span> <span class="n">width</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">min</span><span class="p">()]])</span>
+<span class="linenos">42</span>
+<span class="linenos">43</span><span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">element_map</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<span class="linenos">44</span>    <span class="c1"># apply wind load on elements that are vertical</span>
+<span class="linenos">45</span>    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">el</span><span class="o">.</span><span class="n">angle</span><span class="p">),</span> <span class="mi">1</span><span class="p">):</span>
+<span class="linenos">46</span>        <span class="n">ss</span><span class="o">.</span><span class="n">q_load</span><span class="p">(</span>
+<span class="linenos">47</span>            <span class="n">q</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="linenos">48</span>            <span class="n">element_id</span><span class="o">=</span><span class="n">el</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
+<span class="linenos">49</span>            <span class="n">direction</span><span class="o">=</span><span class="s1">&#39;x&#39;</span>
+<span class="linenos">50</span>        <span class="p">)</span>
+<span class="linenos">51</span>
+<span class="linenos">52</span><span class="n">ss</span><span class="o">.</span><span class="n">show_structure</span><span class="p">()</span>
+<span class="linenos">53</span><span class="n">ss</span><span class="o">.</span><span class="n">solve</span><span class="p">()</span>
+<span class="linenos">54</span><span class="n">ss</span><span class="o">.</span><span class="n">show_displacement</span><span class="p">(</span><span class="n">factor</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="linenos">55</span><span class="n">ss</span><span class="o">.</span><span class="n">show_bending_moment</span><span class="p">()</span>
+</pre></div>
+</div>
+<img alt="_images/tower_bridge_struct.png" src="_images/tower_bridge_struct.png" />
+<img alt="_images/tower_bridge_displa.png" src="_images/tower_bridge_displa.png" />
+<img alt="_images/tower_bridge_moment.png" src="_images/tower_bridge_moment.png" />
+</section>
+<section id="advanced">
+<h1>Advanced<a class="headerlink" href="#advanced" title="Permalink to this heading">¶</a></h1>
+<p>Take a look at this blog post. Here anaStruct was used to do a non linear water accumulation analysis. <a class="reference external" href="https://www.ritchievink.com/blog/2017/08/23/a-nonlinear-water-accumulation-analysis-in-python/">Water accumulation blog post</a>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">  1</span><span class="c1"># import dependencies</span>
+<span class="linenos">  2</span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="linenos">  3</span><span class="kn">from</span> <span class="nn">anastruct.basic</span> <span class="kn">import</span> <span class="n">converge</span>
+<span class="linenos">  4</span><span class="kn">from</span> <span class="nn">anastruct.material.profile</span> <span class="kn">import</span> <span class="n">HEA</span><span class="p">,</span> <span class="n">IPE</span>
+<span class="linenos">  5</span><span class="kn">from</span> <span class="nn">anastruct.fem.system</span> <span class="kn">import</span> <span class="n">SystemElements</span><span class="p">,</span> <span class="n">Vertex</span>
+<span class="linenos">  6</span><span class="kn">from</span> <span class="nn">anastruct.material.units</span> <span class="kn">import</span> <span class="n">to_kNm2</span><span class="p">,</span> <span class="n">to_kN</span>
+<span class="linenos">  7</span>
+<span class="linenos">  8</span><span class="c1"># constants</span>
+<span class="linenos">  9</span><span class="n">E</span> <span class="o">=</span> <span class="mf">2.1e5</span>  <span class="c1"># Construction steels Young&#39;s modulus</span>
+<span class="linenos"> 10</span><span class="n">b</span> <span class="o">=</span> <span class="mi">5</span>  <span class="c1"># c.t.c distance portals</span>
+<span class="linenos"> 11</span><span class="n">q_water</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="linenos"> 12</span>
+<span class="linenos"> 13</span><span class="c1"># axes height levels</span>
+<span class="linenos"> 14</span><span class="n">h_1</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="linenos"> 15</span><span class="n">h_2</span> <span class="o">=</span> <span class="mf">0.258</span>
+<span class="linenos"> 16</span><span class="n">h_3</span> <span class="o">=</span> <span class="mf">0.046</span>
+<span class="linenos"> 17</span><span class="n">h_4</span> <span class="o">=</span> <span class="mf">0.274</span>
+<span class="linenos"> 18</span><span class="n">h_5</span> <span class="o">=</span> <span class="mf">0.032</span>
+<span class="linenos"> 19</span><span class="n">h_6</span> <span class="o">=</span> <span class="mf">0.15</span>
+<span class="linenos"> 20</span>
+<span class="linenos"> 21</span><span class="c1"># beam spans</span>
+<span class="linenos"> 22</span><span class="n">span_1</span> <span class="o">=</span> <span class="n">span_2</span> <span class="o">=</span> <span class="mf">21.9</span>
+<span class="linenos"> 23</span><span class="n">span_3</span> <span class="o">=</span> <span class="mf">8.9</span>
+<span class="linenos"> 24</span>
+<span class="linenos"> 25</span><span class="c1"># Vertices at the axes</span>
+<span class="linenos"> 26</span><span class="n">p1</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">h_1</span><span class="p">)</span>
+<span class="linenos"> 27</span><span class="n">p2</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">span_1</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">h_2</span><span class="p">)</span>
+<span class="linenos"> 28</span><span class="n">p3</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">span_1</span><span class="p">,</span> <span class="n">h_3</span><span class="p">)</span>
+<span class="linenos"> 29</span><span class="n">p4</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">span_1</span> <span class="o">+</span> <span class="n">span_2</span> <span class="o">*</span> <span class="mf">0.5</span><span class="p">,</span> <span class="n">h_4</span><span class="p">)</span>
+<span class="linenos"> 30</span><span class="n">p5</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">span_1</span> <span class="o">+</span> <span class="n">span_2</span><span class="p">,</span> <span class="n">h_5</span><span class="p">)</span>
+<span class="linenos"> 31</span><span class="n">p6</span> <span class="o">=</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">span_1</span> <span class="o">+</span> <span class="n">span_2</span> <span class="o">+</span> <span class="n">span_3</span><span class="p">,</span> <span class="n">h_6</span><span class="p">)</span>
+<span class="linenos"> 32</span>
+<span class="linenos"> 33</span><span class="k">def</span> <span class="nf">structure</span><span class="p">():</span>
+<span class="linenos"> 34</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="linenos"> 35</span><span class="sd">    Build the structure from left to right, starting at axis 1.</span>
+<span class="linenos"> 36</span>
+<span class="linenos"> 37</span><span class="sd">    variables:</span>
+<span class="linenos"> 38</span><span class="sd">    EA = Young&#39;s modulus * Area</span>
+<span class="linenos"> 39</span><span class="sd">    EI = Young&#39;s modulus * moment of Inertia</span>
+<span class="linenos"> 40</span><span class="sd">    g = Weight [kN/ m]</span>
+<span class="linenos"> 41</span><span class="sd">    elements = reference of the element id&#39;s that were created</span>
+<span class="linenos"> 42</span><span class="sd">    dl = c.t.c distance different nodes.</span>
+<span class="linenos"> 43</span><span class="sd">    &quot;&quot;&quot;</span>
+<span class="linenos"> 44</span>
+<span class="linenos"> 45</span>    <span class="n">dl</span> <span class="o">=</span> <span class="mf">0.2</span>
+<span class="linenos"> 46</span>
+<span class="linenos"> 47</span>
+<span class="linenos"> 48</span>    <span class="c1">## SPAN 1 AND 2</span>
+<span class="linenos"> 49</span>
+<span class="linenos"> 50</span>    <span class="c1"># The elements between axis 1 and 3 are an IPE 450 member.</span>
+<span class="linenos"> 51</span>    <span class="n">EA</span> <span class="o">=</span> <span class="n">to_kN</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">450</span><span class="p">][</span><span class="s1">&#39;A&#39;</span><span class="p">])</span>  <span class="c1"># Y</span>
+<span class="linenos"> 52</span>    <span class="n">EI</span> <span class="o">=</span> <span class="n">to_kNm2</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">450</span><span class="p">][</span><span class="s2">&quot;Iy&quot;</span><span class="p">])</span>
+<span class="linenos"> 53</span>    <span class="n">g</span> <span class="o">=</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">450</span><span class="p">][</span><span class="s1">&#39;G&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="mi">100</span>
+<span class="linenos"> 54</span>
+<span class="linenos"> 55</span>    <span class="c1"># New system.</span>
+<span class="linenos"> 56</span>    <span class="n">ss</span> <span class="o">=</span> <span class="n">SystemElements</span><span class="p">(</span><span class="n">mesh</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">plot_backend</span><span class="o">=</span><span class="s2">&quot;mpl&quot;</span><span class="p">)</span>
+<span class="linenos"> 57</span>
+<span class="linenos"> 58</span>    <span class="c1"># span 1</span>
+<span class="linenos"> 59</span>    <span class="n">first</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<span class="linenos"> 60</span>        <span class="n">spring</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mf">9e3</span><span class="p">},</span>
+<span class="linenos"> 61</span>        <span class="n">mp</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mi">70</span><span class="p">},</span>
+<span class="linenos"> 62</span>    <span class="p">)</span>
+<span class="linenos"> 63</span>
+<span class="linenos"> 64</span>    <span class="n">elements</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_multiple_elements</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="p">[</span><span class="n">p1</span><span class="p">,</span> <span class="n">p2</span><span class="p">],</span> <span class="n">dl</span><span class="o">=</span><span class="n">dl</span><span class="p">,</span> <span class="n">first</span><span class="o">=</span><span class="n">first</span><span class="p">,</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+<span class="linenos"> 65</span>    <span class="n">elements</span> <span class="o">+=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_multiple_elements</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">p3</span><span class="p">,</span> <span class="n">dl</span><span class="o">=</span><span class="n">dl</span><span class="p">,</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+<span class="linenos"> 66</span>
+<span class="linenos"> 67</span>    <span class="c1"># span 2</span>
+<span class="linenos"> 68</span>    <span class="n">first</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<span class="linenos"> 69</span>        <span class="n">spring</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mf">40e3</span><span class="p">},</span>
+<span class="linenos"> 70</span>        <span class="n">mp</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mi">240</span><span class="p">}</span>
+<span class="linenos"> 71</span>    <span class="p">)</span>
+<span class="linenos"> 72</span>    <span class="n">elements</span> <span class="o">+=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_multiple_elements</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">p4</span><span class="p">,</span> <span class="n">dl</span><span class="o">=</span><span class="n">dl</span><span class="p">,</span> <span class="n">first</span><span class="o">=</span><span class="n">first</span><span class="p">,</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+<span class="linenos"> 73</span>    <span class="n">elements</span> <span class="o">+=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_multiple_elements</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">p5</span><span class="p">,</span> <span class="n">dl</span><span class="o">=</span><span class="n">dl</span><span class="p">,</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+<span class="linenos"> 74</span>
+<span class="linenos"> 75</span>
+<span class="linenos"> 76</span>    <span class="c1">## SPAN 3</span>
+<span class="linenos"> 77</span>
+<span class="linenos"> 78</span>    <span class="c1"># span 3</span>
+<span class="linenos"> 79</span>    <span class="c1"># different IPE</span>
+<span class="linenos"> 80</span>    <span class="n">g</span> <span class="o">=</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">240</span><span class="p">][</span><span class="s1">&#39;G&#39;</span><span class="p">]</span> <span class="o">/</span> <span class="mi">100</span>
+<span class="linenos"> 81</span>    <span class="n">EA</span> <span class="o">=</span> <span class="n">to_kN</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">240</span><span class="p">][</span><span class="s1">&#39;A&#39;</span><span class="p">])</span>
+<span class="linenos"> 82</span>    <span class="n">EI</span> <span class="o">=</span> <span class="n">to_kNm2</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">240</span><span class="p">][</span><span class="s2">&quot;Iy&quot;</span><span class="p">])</span>
+<span class="linenos"> 83</span>    <span class="n">first</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<span class="linenos"> 84</span>        <span class="n">spring</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mf">15e3</span><span class="p">},</span>
+<span class="linenos"> 85</span>        <span class="n">mp</span><span class="o">=</span><span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mi">25</span><span class="p">},</span>
+<span class="linenos"> 86</span>    <span class="p">)</span>
+<span class="linenos"> 87</span>
+<span class="linenos"> 88</span>    <span class="n">elements</span> <span class="o">+=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_multiple_elements</span><span class="p">(</span><span class="n">location</span><span class="o">=</span><span class="n">p6</span><span class="p">,</span> <span class="n">first</span><span class="o">=</span><span class="n">first</span><span class="p">,</span> <span class="n">dl</span><span class="o">=</span><span class="n">dl</span><span class="p">,</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">,</span> <span class="n">g</span><span class="o">=</span><span class="n">g</span><span class="p">)</span>
+<span class="linenos"> 89</span>
+<span class="linenos"> 90</span>    <span class="c1"># Add a dead load of -2 kN/m to all elements.</span>
+<span class="linenos"> 91</span>    <span class="n">ss</span><span class="o">.</span><span class="n">q_load</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">)</span>
+<span class="linenos"> 92</span>
+<span class="linenos"> 93</span>
+<span class="linenos"> 94</span>    <span class="c1">## COLUMNS</span>
+<span class="linenos"> 95</span>
+<span class="linenos"> 96</span>    <span class="c1"># column height</span>
+<span class="linenos"> 97</span>    <span class="n">h</span> <span class="o">=</span> <span class="mf">7.2</span>
+<span class="linenos"> 98</span>
+<span class="linenos"> 99</span>    <span class="c1"># left column</span>
+<span class="linenos">100</span>    <span class="n">EA</span> <span class="o">=</span> <span class="n">to_kN</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">220</span><span class="p">][</span><span class="s1">&#39;A&#39;</span><span class="p">])</span>
+<span class="linenos">101</span>    <span class="n">EI</span> <span class="o">=</span> <span class="n">to_kNm2</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">HEA</span><span class="p">[</span><span class="mi">220</span><span class="p">][</span><span class="s2">&quot;Iy&quot;</span><span class="p">])</span>
+<span class="linenos">102</span>    <span class="n">left</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_element</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="n">h</span><span class="p">]],</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">)</span>
+<span class="linenos">103</span>
+<span class="linenos">104</span>    <span class="c1"># right column</span>
+<span class="linenos">105</span>    <span class="n">EA</span> <span class="o">=</span> <span class="n">to_kN</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">IPE</span><span class="p">[</span><span class="mi">180</span><span class="p">][</span><span class="s1">&#39;A&#39;</span><span class="p">])</span>
+<span class="linenos">106</span>    <span class="n">EI</span> <span class="o">=</span> <span class="n">to_kNm2</span><span class="p">(</span><span class="n">E</span> <span class="o">*</span> <span class="n">HEA</span><span class="p">[</span><span class="mi">180</span><span class="p">][</span><span class="s2">&quot;Iy&quot;</span><span class="p">])</span>
+<span class="linenos">107</span>    <span class="n">right</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">add_element</span><span class="p">([</span><span class="n">p6</span><span class="p">,</span> <span class="n">Vertex</span><span class="p">(</span><span class="n">p6</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="o">-</span><span class="n">h</span><span class="p">)],</span> <span class="n">EA</span><span class="o">=</span><span class="n">EA</span><span class="p">,</span> <span class="n">EI</span><span class="o">=</span><span class="n">EI</span><span class="p">)</span>
+<span class="linenos">108</span>
+<span class="linenos">109</span>
+<span class="linenos">110</span>    <span class="c1">## SUPPORTS</span>
+<span class="linenos">111</span>
+<span class="linenos">112</span>    <span class="c1"># node ids for the support</span>
+<span class="linenos">113</span>    <span class="n">id_left</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">element_map</span><span class="p">[</span><span class="n">left</span><span class="p">]</span><span class="o">.</span><span class="n">node_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="linenos">114</span>    <span class="n">id_top_right</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">element_map</span><span class="p">[</span><span class="n">right</span><span class="p">]</span><span class="o">.</span><span class="n">node_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="linenos">115</span>    <span class="n">id_btm_right</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">element_map</span><span class="p">[</span><span class="n">right</span><span class="p">]</span><span class="o">.</span><span class="n">node_map</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+<span class="linenos">116</span>
+<span class="linenos">117</span>    <span class="c1"># Add supports. The location of the supports is defined with the nodes id.</span>
+<span class="linenos">118</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_hinged</span><span class="p">((</span><span class="n">id_left</span><span class="p">,</span> <span class="n">id_btm_right</span><span class="p">))</span>
+<span class="linenos">119</span>
+<span class="linenos">120</span>    <span class="c1"># Retrieve the node ids at axis 2 and 3</span>
+<span class="linenos">121</span>    <span class="n">id_p3</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">find_node_id</span><span class="p">(</span><span class="n">p3</span><span class="p">)</span>
+<span class="linenos">122</span>    <span class="n">id_p5</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">find_node_id</span><span class="p">(</span><span class="n">p5</span><span class="p">)</span>
+<span class="linenos">123</span>
+<span class="linenos">124</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_roll</span><span class="p">(</span><span class="n">id_top_right</span><span class="p">,</span> <span class="n">direction</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="linenos">125</span>
+<span class="linenos">126</span>    <span class="c1"># Add translational spring supports at axes 2 and 3</span>
+<span class="linenos">127</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_spring</span><span class="p">(</span><span class="n">id_p3</span><span class="p">,</span> <span class="n">translation</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mf">2e3</span><span class="p">,</span> <span class="n">roll</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">128</span>    <span class="n">ss</span><span class="o">.</span><span class="n">add_support_spring</span><span class="p">(</span><span class="n">id_p5</span><span class="p">,</span> <span class="n">translation</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mf">3e3</span><span class="p">,</span> <span class="n">roll</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="linenos">129</span>    <span class="k">return</span> <span class="n">ss</span>
+<span class="linenos">130</span>
+<span class="linenos">131</span><span class="n">ss</span> <span class="o">=</span> <span class="n">structure</span><span class="p">()</span>
+<span class="linenos">132</span><span class="n">ss</span><span class="o">.</span><span class="n">show_structure</span><span class="p">(</span><span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
+<span class="linenos">133</span>
+<span class="linenos">134</span><span class="k">def</span> <span class="nf">water_load</span><span class="p">(</span><span class="n">ss</span><span class="p">,</span> <span class="n">water_height</span><span class="p">,</span> <span class="n">deflection</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="linenos">135</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="linenos">136</span><span class="sd">    :param ss: (SystemElements) object.</span>
+<span class="linenos">137</span><span class="sd">    :param water_height: (flt) Water level.</span>
+<span class="linenos">138</span><span class="sd">    :param deflection: (array) Computed deflection.</span>
+<span class="linenos">139</span><span class="sd">    :return (flt) The cubic meters of water on the structure</span>
+<span class="linenos">140</span><span class="sd">    &quot;&quot;&quot;</span>
+<span class="linenos">141</span>
+<span class="linenos">142</span>    <span class="c1"># The horizontal distance between the nodes.</span>
+<span class="linenos">143</span>    <span class="n">dl</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">))</span>
+<span class="linenos">144</span>
+<span class="linenos">145</span>    <span class="k">if</span> <span class="n">deflection</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<span class="linenos">146</span>        <span class="n">deflection</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">node_map</span><span class="p">))</span>
+<span class="linenos">147</span>
+<span class="linenos">148</span>    <span class="c1"># Height of the nodes</span>
+<span class="linenos">149</span>    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">))</span>
+<span class="linenos">150</span>
+<span class="linenos">151</span>    <span class="c1"># An array with point loads.</span>
+<span class="linenos">152</span>    <span class="c1"># cubic meters * weight water</span>
+<span class="linenos">153</span>    <span class="n">force_water</span> <span class="o">=</span> <span class="p">(</span><span class="n">water_height</span> <span class="o">-</span> <span class="n">y</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="n">deflection</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">])</span> <span class="o">*</span> <span class="n">q_water</span> <span class="o">*</span> <span class="n">b</span> <span class="o">*</span> <span class="n">dl</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+<span class="linenos">154</span>
+<span class="linenos">155</span>    <span class="n">cubics</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="linenos">156</span>    <span class="n">n</span> <span class="o">=</span> <span class="n">force_water</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="linenos">157</span>    <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">ss</span><span class="o">.</span><span class="n">node_map</span><span class="p">:</span>
+<span class="linenos">158</span>        <span class="k">if</span> <span class="n">k</span> <span class="o">&gt;</span> <span class="n">n</span><span class="p">:</span>
+<span class="linenos">159</span>            <span class="k">break</span>
+<span class="linenos">160</span>        <span class="n">point_load</span> <span class="o">=</span> <span class="n">force_water</span><span class="p">[</span><span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+<span class="linenos">161</span>
+<span class="linenos">162</span>        <span class="k">if</span> <span class="n">point_load</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+<span class="linenos">163</span>            <span class="n">ss</span><span class="o">.</span><span class="n">point_load</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">Fx</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">Fz</span><span class="o">=-</span><span class="n">point_load</span><span class="p">)</span>
+<span class="linenos">164</span>            <span class="n">cubics</span> <span class="o">+=</span> <span class="n">point_load</span> <span class="o">/</span> <span class="n">q_water</span>
+<span class="linenos">165</span>
+<span class="linenos">166</span>    <span class="k">return</span> <span class="n">cubics</span>
+<span class="linenos">167</span>
+<span class="linenos">168</span><span class="k">def</span> <span class="nf">det_water_height</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">deflection</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="linenos">169</span><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="linenos">170</span><span class="sd">    :param c: (flt) Cubic meters.</span>
+<span class="linenos">171</span><span class="sd">    :param deflection: (array) Node deflection values.</span>
+<span class="linenos">172</span><span class="sd">    :return (SystemElement, flt) The structure and the redistributed water level is returned.</span>
+<span class="linenos">173</span><span class="sd">    &quot;&quot;&quot;</span>
+<span class="linenos">174</span>    <span class="n">wh</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="linenos">175</span>
+<span class="linenos">176</span>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+<span class="linenos">177</span>        <span class="n">ss</span> <span class="o">=</span> <span class="n">structure</span><span class="p">()</span>
+<span class="linenos">178</span>        <span class="n">cubics</span> <span class="o">=</span> <span class="n">water_load</span><span class="p">(</span><span class="n">ss</span><span class="p">,</span> <span class="n">wh</span><span class="p">,</span> <span class="n">deflection</span><span class="p">)</span>
+<span class="linenos">179</span>
+<span class="linenos">180</span>        <span class="n">factor</span> <span class="o">=</span> <span class="n">converge</span><span class="p">(</span><span class="n">cubics</span><span class="p">,</span> <span class="n">c</span><span class="p">)</span>
+<span class="linenos">181</span>        <span class="k">if</span> <span class="mf">0.9999</span> <span class="o">&lt;=</span> <span class="n">factor</span> <span class="o">&lt;=</span> <span class="mf">1.0001</span><span class="p">:</span>
+<span class="linenos">182</span>            <span class="k">return</span> <span class="n">ss</span><span class="p">,</span> <span class="n">wh</span>
+<span class="linenos">183</span>
+<span class="linenos">184</span>        <span class="n">wh</span> <span class="o">*=</span> <span class="n">factor</span>
+<span class="linenos">185</span>
+<span class="linenos">186</span><span class="n">cubics</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="linenos">187</span><span class="n">water_heights</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="linenos">188</span>
+<span class="linenos">189</span><span class="n">a</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="linenos">190</span><span class="n">deflection</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="linenos">191</span><span class="n">max_water_level</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="linenos">192</span>
+<span class="linenos">193</span><span class="c1"># Iterate from 8 m3 to 15 m3 of water.</span>
+<span class="linenos">194</span>
+<span class="linenos">195</span><span class="k">for</span> <span class="n">cubic</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">5</span><span class="p">):</span>  <span class="c1"># This loop computes the results per m3 of storaged water.</span>
+<span class="linenos">196</span>    <span class="n">wh</span> <span class="o">=</span> <span class="mf">0.05</span>
+<span class="linenos">197</span>    <span class="n">lastwh</span> <span class="o">=</span> <span class="mf">0.2</span>
+<span class="linenos">198</span>    <span class="n">cubic</span> <span class="o">/=</span> <span class="mi">10</span>
+<span class="linenos">199</span>
+<span class="linenos">200</span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Starting analysis of </span><span class="si">{</span><span class="n">cubic</span><span class="si">}</span><span class="s2"> m3&quot;</span><span class="p">)</span>
+<span class="linenos">201</span>
+<span class="linenos">202</span>    <span class="n">c</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="linenos">203</span>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>  <span class="c1"># This loop redistributes the water until the water level converges.</span>
+<span class="linenos">204</span>
+<span class="linenos">205</span>        <span class="c1"># redistribute the water</span>
+<span class="linenos">206</span>        <span class="n">ss</span><span class="p">,</span> <span class="n">wh</span> <span class="o">=</span> <span class="n">det_water_height</span><span class="p">(</span><span class="n">cubic</span><span class="p">,</span> <span class="n">deflection</span><span class="p">)</span>
+<span class="linenos">207</span>
+<span class="linenos">208</span>        <span class="c1"># Do a non linear calculation!!</span>
+<span class="linenos">209</span>        <span class="n">ss</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">max_iter</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="linenos">210</span>        <span class="n">deflection</span> <span class="o">=</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_node_result_range</span><span class="p">(</span><span class="s2">&quot;uy&quot;</span><span class="p">)</span>
+<span class="linenos">211</span>
+<span class="linenos">212</span>        <span class="c1"># Some breaking conditions</span>
+<span class="linenos">213</span>        <span class="k">if</span> <span class="nb">min</span><span class="p">(</span><span class="n">deflection</span><span class="p">)</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+<span class="linenos">214</span>            <span class="nb">print</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">deflection</span><span class="p">),</span> <span class="s2">&quot;Breaking due to exceeding max deflection&quot;</span><span class="p">)</span>
+<span class="linenos">215</span>            <span class="k">break</span>
+<span class="linenos">216</span>        <span class="k">if</span> <span class="mf">0.9999</span> <span class="o">&lt;</span> <span class="n">lastwh</span> <span class="o">/</span> <span class="n">wh</span> <span class="o">&lt;</span> <span class="mf">1.001</span><span class="p">:</span>
+<span class="linenos">217</span>            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Convergence in </span><span class="si">{</span><span class="n">c</span><span class="si">}</span><span class="s2"> iterations.&quot;</span><span class="p">)</span>
+<span class="linenos">218</span>            <span class="n">cubics</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cubic</span><span class="p">)</span>
+<span class="linenos">219</span>            <span class="n">water_heights</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wh</span><span class="p">)</span>
+<span class="linenos">220</span>            <span class="k">break</span>
+<span class="linenos">221</span>
+<span class="linenos">222</span>        <span class="n">lastwh</span> <span class="o">=</span> <span class="n">wh</span>
+<span class="linenos">223</span>        <span class="n">c</span> <span class="o">+=</span> <span class="mi">1</span>
+<span class="linenos">224</span>
+<span class="linenos">225</span>    <span class="k">if</span> <span class="n">wh</span> <span class="o">&gt;</span> <span class="n">max_water_level</span><span class="p">:</span>
+<span class="linenos">226</span>        <span class="n">max_water_level</span> <span class="o">=</span> <span class="n">wh</span>
+<span class="linenos">227</span>    <span class="k">else</span><span class="p">:</span>
+<span class="linenos">228</span>        <span class="n">a</span> <span class="o">+=</span> <span class="mi">1</span>
+<span class="linenos">229</span>        <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">:</span>
+<span class="linenos">230</span>            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Breaking. Water level isn&#39;t rising.&quot;</span><span class="p">)</span>
+<span class="linenos">231</span>            <span class="k">break</span>
+<span class="linenos">232</span>
+<span class="linenos">233</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="n">el</span><span class="o">.</span><span class="n">bending_moment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">el</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">element_map</span><span class="o">.</span><span class="n">values</span><span class="p">())[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+<span class="linenos">234</span><span class="n">a</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="linenos">235</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="n">p6</span><span class="o">.</span><span class="n">x</span><span class="p">],</span> <span class="p">[</span><span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;black&quot;</span><span class="p">)</span>
+<span class="linenos">236</span>
+<span class="linenos">237</span><span class="n">c</span> <span class="o">=</span> <span class="s2">&quot;red&quot;</span>
+<span class="linenos">238</span><span class="n">a</span> <span class="o">=</span> <span class="mi">240</span>
+<span class="linenos">239</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">p3</span><span class="o">.</span><span class="n">x</span> <span class="o">-</span> <span class="mi">5</span><span class="p">,</span> <span class="n">p3</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="linenos">240</span><span class="n">a</span> <span class="o">=</span> <span class="mi">25</span>
+<span class="linenos">241</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">p5</span><span class="o">.</span><span class="n">x</span> <span class="o">-</span> <span class="mi">5</span><span class="p">,</span> <span class="n">p5</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="linenos">242</span><span class="n">a</span> <span class="o">=</span> <span class="mi">70</span>
+<span class="linenos">243</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">([</span><span class="n">p1</span><span class="o">.</span><span class="n">x</span> <span class="o">-</span> <span class="mi">5</span><span class="p">,</span> <span class="n">p1</span><span class="o">.</span><span class="n">x</span> <span class="o">+</span> <span class="mi">5</span><span class="p">],</span> <span class="p">[</span><span class="n">a</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+<span class="linenos">244</span>
+<span class="linenos">245</span><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Bending moment [kNm]&quot;</span><span class="p">)</span>
+<span class="linenos">246</span><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Span [m]&quot;</span><span class="p">)</span>
+<span class="linenos">247</span><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="linenos">248</span>
+<span class="linenos">249</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])</span>
+<span class="linenos">250</span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">ss</span><span class="o">.</span><span class="n">nodes_range</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">ss</span><span class="o">.</span><span class="n">get_node_result_range</span><span class="p">(</span><span class="s2">&quot;uy&quot;</span><span class="p">)[:</span><span class="o">-</span><span class="mi">2</span><span class="p">])])</span>
+<span class="linenos">251</span>
+<span class="linenos">252</span><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Height level roof when accumulating [m]&quot;</span><span class="p">)</span>
+<span class="linenos">253</span><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Span [m]&quot;</span><span class="p">)</span>
+<span class="linenos">254</span><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="saving.html" class="btn btn-neutral float-left" title="Saving" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ritchie Vink
+      
+        <span class="commit">
+          Revision <code>f03aa282</code>.
+        </span>
+      
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  
+
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+   
+
+</body>
+</html>
