@@ -1,6 +1,12 @@
 import sys
 import string
 import numpy as np
+import json
+import warnings
+import traceback
+
+# Suppress Matplotlib aspect ratio warnings during navigation
+warnings.filterwarnings("ignore", message=".*Ignoring fixed y limits.*")
 
 # --- CRITICAL: Matplotlib Backend Configuration ---
 import matplotlib
@@ -14,23 +20,47 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QGroupBox, QFormLayout, 
     QComboBox, QSlider, QScrollArea, QMessageBox, QTabWidget, QCheckBox,
     QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QListWidget,
-    QInputDialog, QGridLayout, QStackedWidget, QSizePolicy
+    QInputDialog, QGridLayout, QStackedWidget, QSizePolicy,
+    QFileDialog
 )
 from PyQt6.QtCore import Qt
 
 from anastruct import SystemElements
 
-class ElementManagerDialog(QDialog):
+class FrameModel:
+    """Stores the blueprint of the structural model, insulated from anastruct's internal state."""
+    def __init__(self):
+        self.elements = []      # [{'loc': [[x1,y1],[x2,y2]], 'EA':..., 'EI':...}]
+        self.supports = []      # [{'loc': [x,y], 'type': str, 'args': dict}]
+        self.point_loads = []   # [{'loc': [x,y], 'Fx': float, 'Fz': float}]
+        self.moment_loads = []  # [{'loc': [x,y], 'Ty': float}]
+        self.q_loads = []       # [{'element_idx': int, 'q': val, 'dir': str, 'qp': val}]
+        self.system = SystemElements()
+
+    def clear(self):
+        self.elements.clear()
+        self.supports.clear()
+        self.point_loads.clear()
+        self.moment_loads.clear()
+        self.q_loads.clear()
+        self.system = SystemElements()
+
+class ElementManagerWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
         self.ss = parent.ss
-        self.setWindowTitle("Element Manager")
-        self.resize(900, 600)
         self.layout = QVBoxLayout(self)
+
+        # Dropdown for sub-section selection
+        self.sub_selector = QComboBox()
+        self.sub_selector.addItems(["Elements", "Nodes", "Supports", "Loads"])
+        self.layout.addWidget(QLabel("Manage Section:"))
+        self.layout.addWidget(self.sub_selector)
         
-        self.tabs = QTabWidget()
-        self.layout.addWidget(self.tabs)
+        self.sub_stack = QStackedWidget()
+        self.layout.addWidget(self.sub_stack)
+        self.sub_selector.currentIndexChanged.connect(self.sub_stack.setCurrentIndex)
         
         # Elements Tab
         self.elements_tab = QWidget()
@@ -43,7 +73,7 @@ class ElementManagerDialog(QDialog):
         self.del_el_btn = QPushButton("Delete Selected Elements")
         self.del_el_btn.clicked.connect(self.delete_elements)
         self.elements_layout.addWidget(self.del_el_btn)
-        self.tabs.addTab(self.elements_tab, "Elements")
+        self.sub_stack.addWidget(self.elements_tab)
         
         # Nodes Tab
         self.nodes_tab = QWidget()
@@ -53,7 +83,7 @@ class ElementManagerDialog(QDialog):
         self.nodes_table.setHorizontalHeaderLabels(["ID", "X", "Y"])
         self.nodes_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.nodes_layout.addWidget(self.nodes_table)
-        self.tabs.addTab(self.nodes_tab, "Nodes")
+        self.sub_stack.addWidget(self.nodes_tab)
         
         # Supports Tab
         self.supports_tab = QWidget()
@@ -66,57 +96,94 @@ class ElementManagerDialog(QDialog):
         self.del_sup_btn = QPushButton("Delete Selected Supports")
         self.del_sup_btn.clicked.connect(self.delete_supports)
         self.supports_layout.addWidget(self.del_sup_btn)
-        self.tabs.addTab(self.supports_tab, "Supports")
-        
-        # Loads Tab
-        self.loads_tab = QWidget()
-        self.loads_layout = QVBoxLayout(self.loads_tab)
-        self.loads_table = QTableWidget()
-        self.loads_table.setColumnCount(4)
-        self.loads_table.setHorizontalHeaderLabels(["Type", "ID", "Value 1", "Value 2"])
-        self.loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.loads_layout.addWidget(self.loads_table)
-        self.del_load_btn = QPushButton("Delete Selected Loads")
-        self.del_load_btn.clicked.connect(self.delete_loads)
-        self.loads_layout.addWidget(self.del_load_btn)
-        self.tabs.addTab(self.loads_tab, "Loads")
+        self.sub_stack.addWidget(self.supports_tab)
 
-        # Save Changes Button
-        self.save_btn = QPushButton("Save Changes")
-        self.save_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; height: 30px;")
-        self.save_btn.clicked.connect(self.confirm_save)
-        self.layout.addWidget(self.save_btn)
+        # Loads Container Widget
+        self.loads_container_tab = QWidget()
+        self.loads_container_layout = QVBoxLayout(self.loads_container_tab)
+
+        self.load_type_selector = QComboBox()
+        self.load_type_selector.addItems(["Point Loads", "Moments", "q-Loads"])
+        self.loads_container_layout.addWidget(QLabel("Load Type:"))
+        self.loads_container_layout.addWidget(self.load_type_selector)
+        
+        self.load_stack = QStackedWidget()
+        self.load_type_selector.currentIndexChanged.connect(self.load_stack.setCurrentIndex)
+        self.loads_container_layout.addWidget(self.load_stack)
+
+        # Point Loads Sub-Tab
+        self.p_loads_sub_tab = QWidget()
+        self.p_loads_layout = QVBoxLayout(self.p_loads_sub_tab)
+        self.p_loads_table = QTableWidget(0, 3)
+        self.p_loads_table.setHorizontalHeaderLabels(["Node ID", "Fx (kN)", "Fz (kN)"])
+        self.p_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.p_loads_layout.addWidget(self.p_loads_table)
+        self.del_p_load_btn = QPushButton("Delete Selected Point Loads")
+        self.del_p_load_btn.clicked.connect(self.delete_loads)
+        self.p_loads_layout.addWidget(self.del_p_load_btn)
+        self.load_stack.addWidget(self.p_loads_sub_tab)
+
+        # Moments Sub-Tab
+        self.m_loads_sub_tab = QWidget()
+        self.m_loads_layout = QVBoxLayout(self.m_loads_sub_tab)
+        self.m_loads_table = QTableWidget(0, 2)
+        self.m_loads_table.setHorizontalHeaderLabels(["Node ID", "Moment (kNm)"])
+        self.m_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.m_loads_layout.addWidget(self.m_loads_table)
+        self.del_m_load_btn = QPushButton("Delete Selected Moments")
+        self.del_m_load_btn.clicked.connect(self.delete_loads)
+        self.m_loads_layout.addWidget(self.del_m_load_btn)
+        self.load_stack.addWidget(self.m_loads_sub_tab)
+
+        # q-Loads Sub-Tab
+        self.q_loads_sub_tab = QWidget()
+        self.q_loads_layout = QVBoxLayout(self.q_loads_sub_tab)
+        self.q_loads_table = QTableWidget(0, 6)
+        self.q_loads_table.setHorizontalHeaderLabels(["Element ID", "q Start", "q End", "qp Start", "qp End", "Direction"])
+        self.q_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.q_loads_layout.addWidget(self.q_loads_table)
+        self.del_q_load_btn = QPushButton("Delete Selected q-Loads")
+        self.del_q_load_btn.clicked.connect(self.delete_loads)
+        self.q_loads_layout.addWidget(self.del_q_load_btn)
+        self.load_stack.addWidget(self.q_loads_sub_tab)
+
+        self.sub_stack.addWidget(self.loads_container_tab) # Add the new container to main sub_stack
 
         # Connect change signals
-        self.elements_table.itemChanged.connect(self.on_element_change)
-        self.nodes_table.itemChanged.connect(self.on_node_change)
+        self.elements_table.itemChanged.connect(lambda _: self.apply_changes())
+        self.nodes_table.itemChanged.connect(lambda _: self.apply_changes())
+        self.p_loads_table.itemChanged.connect(lambda _: self.apply_changes())
+        self.m_loads_table.itemChanged.connect(lambda _: self.apply_changes())
+        self.q_loads_table.itemChanged.connect(lambda _: self.apply_changes())
 
         self.refresh_data()
 
     def refresh_data(self):
-        self.ss = self.parent_app.ss
+        model = self.parent_app.frames[self.parent_app.current_frame_name]
+        self.ss = model.system
+        
         self.block_signals(True)
         
         # Elements
         self.elements_table.setRowCount(0)
-        for el_id, el in self.ss.element_map.items():
+        for i, e in enumerate(model.elements):
             row = self.elements_table.rowCount()
             self.elements_table.insertRow(row)
-            item_id = QTableWidgetItem(str(el_id))
+            item_id = QTableWidgetItem(str(i + 1))
             item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
             self.elements_table.setItem(row, 0, item_id)
-            item_n1 = QTableWidgetItem(str(el.node_id1))
-            item_n1.setFlags(item_n1.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.elements_table.setItem(row, 1, item_n1)
-            item_n2 = QTableWidgetItem(str(el.node_id2))
-            item_n2.setFlags(item_n2.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.elements_table.setItem(row, 2, item_n2)
-            self.elements_table.setItem(row, 3, QTableWidgetItem(str(el.EA)))
-            self.elements_table.setItem(row, 4, QTableWidgetItem(str(el.EI)))
+            
+            nid1 = self.ss.find_node_id(vertex=e['loc'][0])
+            nid2 = self.ss.find_node_id(vertex=e['loc'][1])
+            self.elements_table.setItem(row, 1, QTableWidgetItem(str(nid1 or "?")))
+            self.elements_table.setItem(row, 2, QTableWidgetItem(str(nid2 or "?")))
+            self.elements_table.setItem(row, 3, QTableWidgetItem(str(e['EA'])))
+            self.elements_table.setItem(row, 4, QTableWidgetItem(str(e['EI'])))
 
         # Nodes
         self.nodes_table.setRowCount(0)
-        for n_id, node in self.ss.node_map.items():
+        for n_id in sorted(self.ss.node_map.keys()):
+            node = self.ss.node_map[n_id]
             row = self.nodes_table.rowCount()
             self.nodes_table.insertRow(row)
             item_id = QTableWidgetItem(str(n_id))
@@ -127,88 +194,105 @@ class ElementManagerDialog(QDialog):
 
         # Supports
         self.supports_table.setRowCount(0)
-        if hasattr(self.ss, 'supports_fixed'):
-            for node in self.ss.supports_fixed: self._add_support_row(node.id, "Fixed")
-        if hasattr(self.ss, 'supports_hinged'):
-            for node in self.ss.supports_hinged: self._add_support_row(node.id, "Hinged")
-        
-        if hasattr(self.ss, 'supports_roll') and hasattr(self.ss, 'supports_roll_direction'):
-            for i, node in enumerate(self.ss.supports_roll):
-                direction = self.ss.supports_roll_direction[i]
-                self._add_support_row(node.id, f"Roll (dir={direction})")
+        for s in model.supports:
+            nid = self.ss.find_node_id(vertex=s['loc'])
+            stype = s['type'].capitalize()
+            if stype == "Roll": stype += f" (dir={s['args'].get('direction', 2)})"
+            elif stype == "Spring": stype += f" (k={s['args'].get('k', 5000)})"
+            self._add_support_row(nid, stype)
 
-        if hasattr(self.ss, 'supports_spring_args'):
-            for nid, translation, k, _ in self.ss.supports_spring_args:
-                self._add_support_row(nid, f"Spring (k={k}, dir={translation})")
-
-        # Loads
-        self.loads_table.setRowCount(0)
-        
         # Point Loads
-        for node_id, load_data in self.ss.loads_point.items():
-            if isinstance(load_data, dict):
-                fx = load_data.get('Fx', 0)
-                fz = load_data.get('Fz', 0)
-            elif isinstance(load_data, (list, tuple)):
-                fx = load_data[0]
-                fz = load_data[1]
-            else: fx, fz = 0, 0
-            self._add_load_row("Point", node_id, f"Fx={fx}", f"Fz={fz}", node_id)
+        self.p_loads_table.setRowCount(0)
+        for p in model.point_loads:
+            nid = self.ss.find_node_id(vertex=p['loc'])
+            row = self.p_loads_table.rowCount()
+            self.p_loads_table.insertRow(row)
+            item = QTableWidgetItem(str(nid))
+            item.setData(Qt.ItemDataRole.UserRole, nid)
+            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+            self.p_loads_table.setItem(row, 0, item)
+            self.p_loads_table.setItem(row, 1, QTableWidgetItem(str(p['Fx'])))
+            self.p_loads_table.setItem(row, 2, QTableWidgetItem(str(p['Fz'])))
             
         # Moment Loads
-        for node_id, load_data in self.ss.loads_moment.items():
-            if isinstance(load_data, dict):
-                ty = load_data.get('Ty', 0)
-            elif isinstance(load_data, (list, tuple)):
-                ty = load_data[0]
-            else: ty = load_data
-            self._add_load_row("Moment", node_id, f"Ty={ty}", "", node_id)
+        self.m_loads_table.setRowCount(0)
+        for m in model.moment_loads:
+            nid = self.ss.find_node_id(vertex=m['loc'])
+            row = self.m_loads_table.rowCount()
+            self.m_loads_table.insertRow(row)
+            item = QTableWidgetItem(str(nid))
+            item.setData(Qt.ItemDataRole.UserRole, nid)
+            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+            self.m_loads_table.setItem(row, 0, item)
+            self.m_loads_table.setItem(row, 1, QTableWidgetItem(str(m['Ty'])))
             
         # q-Loads
-        for el_id, load_data in self.ss.loads_q.items():
-            if isinstance(load_data, dict):
-                q = load_data.get('q', 0)
-                direction = load_data.get('direction', '')
-            elif isinstance(load_data, (list, tuple)):
-                q = load_data[0]
-                direction = load_data[1]
-            else: q, direction = 0, ''
-            self._add_load_row("q-Load", el_id, f"q={q}", f"Dir={direction}", el_id)
+        self.q_loads_table.setRowCount(0)
+        for q in model.q_loads:
+            el_id = q['element_idx'] + 1
+            row = self.q_loads_table.rowCount()
+            self.q_loads_table.insertRow(row)
+            item = QTableWidgetItem(str(el_id))
+            item.setData(Qt.ItemDataRole.UserRole, el_id)
+            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
+            self.q_loads_table.setItem(row, 0, item)
+            
+            q_val = q.get('q', 0)
+            if isinstance(q_val, (list, tuple, np.ndarray)):
+                q_start, q_end = q_val[0], q_val[1] if len(q_val) > 1 else q_val[0]
+            else:
+                q_start = q_end = q_val
+                
+            qp_val = q.get('qp', 0)
+            if isinstance(qp_val, (list, tuple, np.ndarray)):
+                qp_start, qp_end = qp_val[0], qp_val[1] if len(qp_val) > 1 else qp_val[0]
+            else:
+                qp_start = qp_end = qp_val
+            
+            direction = q.get('dir', 'element')
+
+            # Clean floating point noise for display
+            def fmt(v): return str(v) if abs(v) > 1e-12 else "0.0"
+            self.q_loads_table.setItem(row, 1, QTableWidgetItem(fmt(q_start)))
+            self.q_loads_table.setItem(row, 2, QTableWidgetItem(fmt(q_end)))
+            self.q_loads_table.setItem(row, 3, QTableWidgetItem(fmt(qp_start)))
+            self.q_loads_table.setItem(row, 4, QTableWidgetItem(fmt(qp_end)))
+            
+            combo = QComboBox()
+            combo.addItems(["y", "x", "element", "parallel"])
+            combo.blockSignals(True)
+            combo.setCurrentText(str(direction))
+            combo.blockSignals(False)
+            combo.currentTextChanged.connect(lambda _: self.apply_changes())
+            self.q_loads_table.setCellWidget(row, 5, combo)
 
         self.block_signals(False)
 
     def _add_support_row(self, nid, type_str):
         row = self.supports_table.rowCount()
         self.supports_table.insertRow(row)
-        self.supports_table.setItem(row, 0, QTableWidgetItem(str(nid)))
-        self.supports_table.setItem(row, 1, QTableWidgetItem(type_str))
-
-    def _add_load_row(self, ltype, oid, v1, v2, index):
-        row = self.loads_table.rowCount()
-        self.loads_table.insertRow(row)
-        self.loads_table.setItem(row, 0, QTableWidgetItem(ltype))
-        self.loads_table.setItem(row, 1, QTableWidgetItem(str(oid)))
-        self.loads_table.setItem(row, 2, QTableWidgetItem(v1))
-        self.loads_table.setItem(row, 3, QTableWidgetItem(v2))
-        self.loads_table.item(row, 0).setData(Qt.ItemDataRole.UserRole, index)
+        item_id = QTableWidgetItem(str(nid))
+        item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
+        self.supports_table.setItem(row, 0, item_id)
+        
+        combo = QComboBox()
+        combo.addItems(["Fixed", "Hinged", "Roll", "Spring"])
+        if "Fixed" in type_str: combo.setCurrentText("Fixed")
+        elif "Hinged" in type_str: combo.setCurrentText("Hinged")
+        elif "Roll" in type_str: combo.setCurrentText("Roll")
+        elif "Spring" in type_str: combo.setCurrentText("Spring")
+        combo.currentTextChanged.connect(lambda _: self.apply_changes())
+        self.supports_table.setCellWidget(row, 1, combo)
 
     def block_signals(self, block):
         self.elements_table.blockSignals(block)
         self.nodes_table.blockSignals(block)
+        self.p_loads_table.blockSignals(block)
+        self.m_loads_table.blockSignals(block)
+        self.load_type_selector.blockSignals(block)
+        self.q_loads_table.blockSignals(block)
 
-    def on_element_change(self, item):
-        try:
-            el_id = int(self.elements_table.item(item.row(), 0).text())
-            val = float(item.text())
-            if item.column() == 3: self.ss.element_map[el_id].EA = val
-            elif item.column() == 4: self.ss.element_map[el_id].EI = val
-        except (ValueError, KeyError, AttributeError): pass
-
-    def on_node_change(self, item):
-        # Pending changes are stored in the table and applied during confirm_save -> rebuild_system
-        pass
-
-    def apply_changes(self):
+    def apply_changes(self, refresh=False):
         """Extracts data from tables and triggers a system rebuild."""
         node_coords = {}
         for row in range(self.nodes_table.rowCount()):
@@ -228,18 +312,55 @@ class ElementManagerDialog(QDialog):
                 element_props[eid] = {'EA': ea, 'EI': ei}
             except (ValueError, AttributeError): continue
 
-        self.parent_app.rebuild_system(node_coords=node_coords, element_props=element_props)
-        self.refresh_data()
+        # Extract supports and loads overrides
+        supports_info = {}
+        for row in range(self.supports_table.rowCount()):
+            try:
+                nid = int(self.supports_table.item(row, 0).text())
+                stype = self.supports_table.cellWidget(row, 1).currentText()
+                supports_info[nid] = stype
+            except (ValueError, AttributeError): continue
 
-    def confirm_save(self):
-        reply = QMessageBox.question(
-            self, 'Confirm Save', 
-            "Do you want to save changes and rebuild the model?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, 
-            QMessageBox.StandardButton.No
+        loads_info = []
+        # Point Loads
+        for row in range(self.p_loads_table.rowCount()):
+            try:
+                nid = int(self.p_loads_table.item(row, 0).text())
+                fx = float(self.p_loads_table.item(row, 1).text())
+                fz = float(self.p_loads_table.item(row, 2).text())
+                loads_info.append({'type': 'Point', 'id': nid, 'v1': fx, 'v2': fz})
+            except (ValueError, AttributeError): continue
+        
+        # Moments
+        for row in range(self.m_loads_table.rowCount()):
+            try:
+                nid = int(self.m_loads_table.item(row, 0).text())
+                ty = float(self.m_loads_table.item(row, 1).text())
+                loads_info.append({'type': 'Moment', 'id': nid, 'v1': ty, 'v2': 0})
+            except (ValueError, AttributeError): continue
+            
+        # q-Loads
+        for row in range(self.q_loads_table.rowCount()):
+            try:
+                eid = int(self.q_loads_table.item(row, 0).text())
+                q_start = float(self.q_loads_table.item(row, 1).text() or 0)
+                q_end = float(self.q_loads_table.item(row, 2).text() or 0)
+                qp_start = float(self.q_loads_table.item(row, 3).text() or 0)
+                qp_end = float(self.q_loads_table.item(row, 4).text() or 0)
+                direction = self.q_loads_table.cellWidget(row, 5).currentText()
+                q_val = q_start if q_start == q_end else [q_start, q_end]
+                qp_val = qp_start if qp_start == qp_end else [qp_start, qp_end]
+                loads_info.append({'type': 'q-Load', 'id': eid, 'v1': q_val, 'v2': direction, 'v3': qp_val})
+            except (ValueError, AttributeError): continue
+
+        self.parent_app.rebuild_system(
+            node_coords=node_coords, 
+            element_props=element_props,
+            supports_info=supports_info,
+            loads_info=loads_info
         )
-        if reply == QMessageBox.StandardButton.Yes:
-            self.apply_changes()
+        if refresh:
+            self.refresh_data()
 
     def delete_elements(self):
         for row in sorted(set(i.row() for i in self.elements_table.selectedIndexes()), reverse=True):
@@ -251,7 +372,7 @@ class ElementManagerDialog(QDialog):
                     if not any(e.node_id1 == nid or e.node_id2 == nid for e in self.ss.element_map.values()):
                         self.ss.loads_point.pop(nid, None)
                         self.ss.loads_moment.pop(nid, None)
-        self.apply_changes()
+        self.apply_changes(refresh=True)
 
     def delete_supports(self):
         for row in sorted(set(i.row() for i in self.supports_table.selectedIndexes()), reverse=True):
@@ -277,23 +398,32 @@ class ElementManagerDialog(QDialog):
                 if hasattr(self.ss, attr):
                     filtered_list = [s for s in getattr(self.ss, attr) if s[0].id != nid_to_del]
                     setattr(self.ss, attr, filtered_list)
-        self.apply_changes()
+        self.apply_changes(refresh=True)
 
     def delete_loads(self):
-        rows = sorted(set(i.row() for i in self.loads_table.selectedIndexes()), reverse=True)
-        to_del = {'Point': [], 'Moment': [], 'q-Load': []}
-        
-        for row in rows:
-            load_type = self.loads_table.item(row, 0).text()
-            # The UserRole now stores the dictionary key (node_id or el_id)
-            key = self.loads_table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            to_del[load_type].append(key)
+        # Determine which table is active
+        load_type_idx = self.load_type_selector.currentIndex()
+        # Indices: 0: Point Loads, 1: Moments, 2: q-Loads
+        if load_type_idx == 0:
+            table = self.p_loads_table
+            ltype = 'Point'
+        elif load_type_idx == 1:
+            table = self.m_loads_table
+            ltype = 'Moment'
+        elif load_type_idx == 2:
+            table = self.q_loads_table
+            ltype = 'q-Load'
+        else:
+            return
 
-        for key in to_del['Point']: self.ss.loads_point.pop(key, None)
-        for key in to_del['Moment']: self.ss.loads_moment.pop(key, None)
-        for key in to_del['q-Load']: self.ss.loads_q.pop(key, None)
+        rows = sorted(set(i.row() for i in table.selectedIndexes()), reverse=True)
+        for row in rows:
+            key = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if ltype == 'Point': self.ss.loads_point.pop(key, None)
+            elif ltype == 'Moment': self.ss.loads_moment.pop(key, None)
+            elif ltype == 'q-Load': self.ss.loads_q.pop(key, None)
         
-        self.apply_changes()
+        self.apply_changes(refresh=True)
 
 class StructuralApp(QMainWindow):
     def __init__(self):
@@ -302,9 +432,10 @@ class StructuralApp(QMainWindow):
         self.setGeometry(100, 100, 1200, 800)
 
         # Frame Management
-        self.frames = {"Frame 1": SystemElements()}
+        self.frames = {"Frame 1": FrameModel()}
         self.current_frame_name = "Frame 1"
-        self.ss = self.frames[self.current_frame_name]
+        self.ss = self.frames[self.current_frame_name].system
+        self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float}}
         
         # View State for Pan/Zoom
         self.press = None
@@ -327,9 +458,17 @@ class StructuralApp(QMainWindow):
         
         # Dropdown for section selection
         self.sidebar_selector = QComboBox()
-        self.sidebar_selector.addItems(["Frames", "Geometry", "Loads & Supports", "Analysis", "Grid"])
+        self.sidebar_selector.addItems(["Grid", "Frames", "Slabs", "Geometry", "Loads & Supports", "Analysis", "Element Manager"])
         sidebar_layout.addWidget(QLabel("Select Section:"))
         sidebar_layout.addWidget(self.sidebar_selector)
+
+        # Global Frame Selector
+        self.active_frame_label = QLabel("Active Frame:")
+        self.global_frame_selector = QComboBox()
+        self.global_frame_selector.addItems(list(self.frames.keys()))
+        sidebar_layout.addWidget(self.active_frame_label)
+        sidebar_layout.addWidget(self.global_frame_selector)
+        self.global_frame_selector.currentTextChanged.connect(self.on_global_frame_selected)
 
         # Stacked widget to hold section content
         self.sidebar_stack = QStackedWidget()
@@ -339,7 +478,69 @@ class StructuralApp(QMainWindow):
         self.sidebar_selector.currentIndexChanged.connect(self.sidebar_stack.setCurrentIndex)
         self.sidebar_selector.currentTextChanged.connect(self.on_sidebar_changed)
 
-        # --- SECTION 0: FRAMES ---
+        # --- SECTION 0: GRID MANAGER ---
+        grid_tab = QWidget()
+        grid_layout = QVBoxLayout(grid_tab)
+        
+        grid_settings = QGroupBox("Grid Spacings")
+        grid_settings_form = QFormLayout()
+        self.grid_x_input = QLineEdit("5")
+        self.grid_y_input = QLineEdit("5")
+        
+        self.grid_z_table = QTableWidget(3, 2)
+        self.grid_z_table.setHorizontalHeaderLabels(["Level", "Elevation (m)"])
+        self.grid_z_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.grid_z_table.setMinimumHeight(150)
+        self.grid_z_table.setItem(0, 0, QTableWidgetItem("Foundation"))
+        self.grid_z_table.setItem(0, 1, QTableWidgetItem("-2.0"))
+        self.grid_z_table.setItem(1, 0, QTableWidgetItem("Ground Floor"))
+        self.grid_z_table.setItem(1, 1, QTableWidgetItem("0.0"))
+        self.grid_z_table.setItem(2, 0, QTableWidgetItem("Floor 2"))
+        self.grid_z_table.setItem(2, 1, QTableWidgetItem("3.5"))
+        
+        self.grid_z_table.itemChanged.connect(self.update_plot)
+        self.grid_z_table.itemChanged.connect(self.update_floor_levels)
+        
+        z_btns = QHBoxLayout()
+        add_z_btn = QPushButton("Add Level")
+        add_z_btn.clicked.connect(self.add_z_level)
+        del_z_btn = QPushButton("Delete Level")
+        del_z_btn.clicked.connect(self.delete_z_level)
+        z_btns.addWidget(add_z_btn)
+        z_btns.addWidget(del_z_btn)
+
+        self.grid_x_input.textChanged.connect(self.update_plot)
+        self.grid_y_input.textChanged.connect(self.update_plot)
+        grid_settings_form.addRow("X Spacings (1,2,3...):", self.grid_x_input)
+        grid_settings_form.addRow("Y Spacings (A,B,C...):", self.grid_y_input)
+        grid_settings_form.addRow("Z Elevations:", self.grid_z_table)
+        grid_settings_form.addRow("", z_btns)
+        grid_settings.setLayout(grid_settings_form)
+        grid_layout.addWidget(grid_settings)
+        
+        grid_assign_group = QGroupBox("Frame Assignments")
+        grid_assign_layout = QVBoxLayout()
+        self.grid_table = QTableWidget(0, 3)
+        self.grid_table.setHorizontalHeaderLabels(["Grid Line", "Frame", "Offset"])
+        self.grid_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.grid_table.itemChanged.connect(self.update_plot)
+        grid_assign_layout.addWidget(self.grid_table)
+        
+        grid_btns = QHBoxLayout()
+        add_ga_btn = QPushButton("Add Assignment")
+        add_ga_btn.clicked.connect(self.add_grid_assignment)
+        del_ga_btn = QPushButton("Delete Selected")
+        del_ga_btn.clicked.connect(self.delete_grid_assignment)
+        grid_btns.addWidget(add_ga_btn)
+        grid_btns.addWidget(del_ga_btn)
+        grid_assign_layout.addLayout(grid_btns)
+        grid_assign_group.setLayout(grid_assign_layout)
+        grid_layout.addWidget(grid_assign_group)
+        
+        grid_layout.addStretch()
+        self.sidebar_stack.addWidget(grid_tab)
+
+        # --- SECTION 1: FRAMES ---
         frames_tab = QWidget()
         frames_layout = QVBoxLayout(frames_tab)
         
@@ -368,7 +569,35 @@ class StructuralApp(QMainWindow):
         frames_layout.addStretch()
         self.sidebar_stack.addWidget(frames_tab)
 
-        # --- SECTION 1: GEOMETRY & BUILD ---
+        # --- SECTION: SLABS ---
+        slabs_tab = QWidget()
+        slabs_layout = QVBoxLayout(slabs_tab)
+        
+        slabs_group = QGroupBox("Manage Slabs")
+        slabs_vbox = QVBoxLayout()
+        self.slabs_table = QTableWidget(0, 3)
+        self.slabs_table.setHorizontalHeaderLabels(["Name", "Points (e.g. A1,A2,B2,B1)", "Pressure (kN/m2)"])
+        self.slabs_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.slabs_table.itemChanged.connect(self.on_slab_data_changed)
+        slabs_vbox.addWidget(self.slabs_table)
+        
+        slab_btns = QHBoxLayout()
+        add_slab_btn = QPushButton("Add Slab")
+        add_slab_btn.clicked.connect(self.add_slab)
+        del_slab_btn = QPushButton("Delete Slab")
+        del_slab_btn.clicked.connect(self.delete_slab)
+        dist_slab_btn = QPushButton("Distribute Slab Loads")
+        dist_slab_btn.clicked.connect(self.distribute_slab_loads)
+        slab_btns.addWidget(add_slab_btn)
+        slab_btns.addWidget(del_slab_btn)
+        slabs_vbox.addLayout(slab_btns)
+        slabs_vbox.addWidget(dist_slab_btn)
+        slabs_group.setLayout(slabs_vbox)
+        slabs_layout.addWidget(slabs_group)
+        slabs_layout.addStretch()
+        self.sidebar_stack.addWidget(slabs_tab)
+
+        # --- SECTION 2: GEOMETRY & BUILD ---
         geometry_tab = QWidget()
         geometry_layout = QVBoxLayout(geometry_tab)
         
@@ -384,7 +613,7 @@ class StructuralApp(QMainWindow):
 
         # Dropdown for Construction Methods
         self.geom_selector = QComboBox()
-        self.geom_selector.addItems(["Manual", "Tower Grid", "Frame Grid", "Combined"])
+        self.geom_selector.addItems(["Manual", "Tower Grid", "Frame Grid", "Combined", "Test Frames"])
         geometry_layout.addWidget(QLabel("Construction Method:"))
         geometry_layout.addWidget(self.geom_selector)
 
@@ -438,11 +667,6 @@ class StructuralApp(QMainWindow):
         self.frame_sup_type = QComboBox()
         self.frame_sup_type.addItems(["Hinged", "Fixed"])
         
-        self.frame_ground_beam = QCheckBox("Add Ground Beam")
-        self.frame_gb_height = QLineEdit("0.5")
-        self.frame_gb_height.setEnabled(False)
-        self.frame_ground_beam.toggled.connect(self.frame_gb_height.setEnabled)
-        
         self.frame_q_loads = QLineEdit("-10")
 
         frame_btn = QPushButton("Generate Frame Grid")
@@ -453,8 +677,6 @@ class StructuralApp(QMainWindow):
         frame_form.addRow("Number of Bays:", self.frame_n_bays)
         frame_form.addRow("Number of Floors:", self.frame_n_floors)
         frame_form.addRow("Foundation Support:", self.frame_sup_type)
-        frame_form.addRow(self.frame_ground_beam)
-        frame_form.addRow("GB Height from Found.:", self.frame_gb_height)
         frame_form.addRow("Gravity UDLs (kN/m):", self.frame_q_loads)
         frame_form.addWidget(frame_btn)
         self.geom_stack.addWidget(frame_tab)
@@ -479,11 +701,25 @@ class StructuralApp(QMainWindow):
         combined_form.addWidget(comb_btn)
         self.geom_stack.addWidget(combined_tab)
 
+        # Tab 5: Test Frames
+        test_frames_tab = QWidget()
+        test_frames_layout = QVBoxLayout(test_frames_tab)
+        btn_3bay = QPushButton("Generate 3-Bay Test Frame")
+        btn_3bay.clicked.connect(lambda: self.build_test_frame(n_bays=3))
+        btn_2bay = QPushButton("Generate 2-Bay Test Frame")
+        btn_2bay.clicked.connect(lambda: self.build_test_frame(n_bays=2))
+        
+        test_frames_layout.addWidget(QLabel("Presets for Default Grid:"))
+        test_frames_layout.addWidget(btn_3bay)
+        test_frames_layout.addWidget(btn_2bay)
+        test_frames_layout.addStretch()
+        self.geom_stack.addWidget(test_frames_tab)
+
         geometry_layout.addWidget(self.geom_stack)
         geometry_layout.addStretch()
         self.sidebar_stack.addWidget(geometry_tab)
 
-        # --- SECTION 2: LOADS & SUPPORTS ---
+        # --- SECTION 3: LOADS & SUPPORTS ---
         assign_tab = QWidget()
         assign_layout = QVBoxLayout(assign_tab)
 
@@ -513,31 +749,51 @@ class StructuralApp(QMainWindow):
         loads_form = QFormLayout()
         
         self.load_type = QComboBox()
-        self.load_type.addItems(["Point Load", "Moment", "q-Load"])
+        self.load_type.addItems(["Point Load", "Moment", "q-Load", "Triangular (Peak Mid)", "Trapezoidal (Uniform Mid)"])
         self.load_type.currentTextChanged.connect(self.update_load_ui)
         
         self.load_id_input = QLineEdit("1")
         self.load_val1 = QLineEdit("10")
+        self.load_val1_end = QLineEdit("10")
         self.load_val2 = QLineEdit("0")
+        self.load_val2_end = QLineEdit("0")
+        self.load_pos1 = QLineEdit("0.5")
+        self.load_pos2 = QLineEdit("0.75")
         self.load_dir = QComboBox()
-        self.load_dir.addItems(["y", "x", "perpendicular", "parallel"])
+        self.load_dir.addItems(["y", "x", "element", "parallel"])
         
         add_load_btn = QPushButton("Apply Load")
         add_load_btn.clicked.connect(self.apply_load)
         
         self.lbl_load_id = QLabel("Node ID:")
         self.lbl_val1 = QLabel("Fx (kN):")
+        self.lbl_val1_end = QLabel("q End (kN/m):")
         self.lbl_val2 = QLabel("Fz (kN):")
+        self.lbl_val2_end = QLabel("qp End (kN/m):")
+        self.lbl_pos1 = QLabel("Pos 1 (ratio):")
+        self.lbl_pos2 = QLabel("Pos 2 (ratio):")
         self.lbl_dir = QLabel("Direction:")
         
         loads_form.addRow("Load Type:", self.load_type)
         loads_form.addRow(self.lbl_load_id, self.load_id_input)
         loads_form.addRow(self.lbl_val1, self.load_val1)
+        loads_form.addRow(self.lbl_val1_end, self.load_val1_end)
         loads_form.addRow(self.lbl_val2, self.load_val2)
+        loads_form.addRow(self.lbl_val2_end, self.load_val2_end)
+        loads_form.addRow(self.lbl_pos1, self.load_pos1)
+        loads_form.addRow(self.lbl_pos2, self.load_pos2)
         loads_form.addRow(self.lbl_dir, self.load_dir)
         loads_form.addRow(add_load_btn)
         
         # Initial state
+        self.lbl_val1_end.hide()
+        self.load_val1_end.hide()
+        self.lbl_val2_end.hide()
+        self.load_val2_end.hide()
+        self.lbl_pos1.hide()
+        self.load_pos1.hide()
+        self.lbl_pos2.hide()
+        self.load_pos2.hide()
         self.lbl_dir.hide()
         self.load_dir.hide()
         
@@ -546,7 +802,7 @@ class StructuralApp(QMainWindow):
         assign_layout.addStretch()
         self.sidebar_stack.addWidget(assign_tab)
 
-        # --- SECTION 3: ANALYSIS & TOOLS ---
+        # --- SECTION 4: ANALYSIS & TOOLS ---
         analysis_tab = QWidget()
         analysis_layout = QVBoxLayout(analysis_tab)
 
@@ -556,35 +812,13 @@ class StructuralApp(QMainWindow):
         solve_btn.clicked.connect(self.solve_system)
         analysis_layout.addWidget(solve_btn)
 
-        # Visualization Controls (Moved from bottom of canvas)
-        viz_group = QGroupBox("Visualization Results")
-        viz_form = QFormLayout()
-        self.view_mode = QComboBox()
-        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Bending Moment", "Grid Plan"])
-        self.view_mode.currentTextChanged.connect(self.update_plot)
-        self.scale_slider = QSlider(Qt.Orientation.Horizontal)
-        self.scale_slider.setRange(1, 100)
-        self.scale_slider.setValue(10)
-        self.scale_slider.valueChanged.connect(self.update_plot)
+        test_ui_btn = QPushButton("Run UI Smoke Test")
+        test_ui_btn.clicked.connect(self.run_ui_test)
+        analysis_layout.addWidget(test_ui_btn)
 
-        self.show_grid = QCheckBox("Show Grid")
-        self.show_grid.setChecked(True)
-        self.show_grid.stateChanged.connect(self.update_plot)
-
-        self.show_ticks = QCheckBox("Show Ticks & Labels")
-        self.show_ticks.setChecked(True)
-        self.show_ticks.stateChanged.connect(self.update_plot)
-
-        reset_view_btn = QPushButton("Reset View (Fit)")
-        reset_view_btn.clicked.connect(self.reset_view)
-
-        viz_form.addRow("View Mode:", self.view_mode)
-        viz_form.addRow("Scale Factor:", self.scale_slider)
-        viz_form.addRow(self.show_grid)
-        viz_form.addRow(self.show_ticks)
-        viz_form.addRow(reset_view_btn)
-        viz_group.setLayout(viz_form)
-        analysis_layout.addWidget(viz_group)
+        export_btn = QPushButton("Export Analysis Results")
+        export_btn.clicked.connect(self.export_results)
+        analysis_layout.addWidget(export_btn)
 
         # Element Manager
         mgr_btn = QPushButton("Element Manager")
@@ -598,42 +832,9 @@ class StructuralApp(QMainWindow):
         analysis_layout.addStretch()
         self.sidebar_stack.addWidget(analysis_tab)
 
-        # --- SECTION 4: GRID MANAGER ---
-        grid_tab = QWidget()
-        grid_layout = QVBoxLayout(grid_tab)
-        
-        grid_settings = QGroupBox("Grid Spacings")
-        grid_settings_form = QFormLayout()
-        self.grid_x_input = QLineEdit("5, 5, 5")
-        self.grid_y_input = QLineEdit("6, 6")
-        self.grid_x_input.textChanged.connect(self.update_plot)
-        self.grid_y_input.textChanged.connect(self.update_plot)
-        grid_settings_form.addRow("X Spacings (1,2,3...):", self.grid_x_input)
-        grid_settings_form.addRow("Y Spacings (A,B,C...):", self.grid_y_input)
-        grid_settings.setLayout(grid_settings_form)
-        grid_layout.addWidget(grid_settings)
-        
-        grid_assign_group = QGroupBox("Frame Assignments")
-        grid_assign_layout = QVBoxLayout()
-        self.grid_table = QTableWidget(0, 3)
-        self.grid_table.setHorizontalHeaderLabels(["Grid Line", "Frame", "Offset"])
-        self.grid_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.grid_table.itemChanged.connect(self.update_plot)
-        grid_assign_layout.addWidget(self.grid_table)
-        
-        grid_btns = QHBoxLayout()
-        add_ga_btn = QPushButton("Add Assignment")
-        add_ga_btn.clicked.connect(self.add_grid_assignment)
-        del_ga_btn = QPushButton("Delete Selected")
-        del_ga_btn.clicked.connect(self.delete_grid_assignment)
-        grid_btns.addWidget(add_ga_btn)
-        grid_btns.addWidget(del_ga_btn)
-        grid_assign_layout.addLayout(grid_btns)
-        grid_assign_group.setLayout(grid_assign_layout)
-        grid_layout.addWidget(grid_assign_group)
-        
-        grid_layout.addStretch()
-        self.sidebar_stack.addWidget(grid_tab)
+        # --- SECTION 5: ELEMENT MANAGER ---
+        self.element_mgr_widget = ElementManagerWidget(self)
+        self.sidebar_stack.addWidget(self.element_mgr_widget)
 
         sidebar_scroll.setWidget(sidebar_widget)
         layout.addWidget(sidebar_scroll)
@@ -642,9 +843,12 @@ class StructuralApp(QMainWindow):
         viz_layout = QVBoxLayout()
         # Create figure managed by pyplot
         self.figure, self.ax = plt.subplots()
+        self.ax.set_aspect('equal', adjustable='box')
+        self.figure.subplots_adjust(left=0.07, right=0.97, top=0.95, bottom=0.07)
         # Use the canvas that pyplot created to maintain the manager link
         self.canvas = self.figure.canvas
-        viz_layout.addWidget(self.canvas)
+        self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        viz_layout.addWidget(self.canvas, stretch=1)
 
         # Connect Pan/Zoom events
         self.canvas.mpl_connect('scroll_event', self.on_scroll)
@@ -652,13 +856,85 @@ class StructuralApp(QMainWindow):
         self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
+        # --- VISUALIZATION TOOLBAR (Below Plot) ---
+        viz_toolbar = QHBoxLayout()
+        
+        self.view_mode = QComboBox()
+        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan"])
+        self.view_mode.currentTextChanged.connect(self.update_plot)
+        
+        self.floor_selector = QComboBox()
+        self.floor_selector.setEnabled(False)
+        self.floor_selector.currentTextChanged.connect(self.update_plot)
+        
+        self.scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.scale_slider.setRange(1, 100)
+        self.scale_slider.setValue(10)
+        self.scale_slider.setFixedWidth(150)
+        self.scale_slider.valueChanged.connect(self.update_plot)
+
+        self.show_grid = QCheckBox("Grid")
+        self.show_grid.setChecked(True)
+        self.show_grid.stateChanged.connect(self.update_plot)
+
+        self.show_ticks = QCheckBox("Ticks")
+        self.show_ticks.setChecked(True)
+        self.show_ticks.stateChanged.connect(self.update_plot)
+
+        self.show_grid_labels = QCheckBox("Grid Labels")
+        self.show_grid_labels.setChecked(True)
+        self.show_grid_labels.stateChanged.connect(self.update_plot)
+
+        self.show_beam_marks = QCheckBox("Beam Marks")
+        self.show_beam_marks.stateChanged.connect(self.update_plot)
+
+        reset_view_btn = QPushButton("Fit View")
+        reset_view_btn.clicked.connect(self.reset_view)
+
+        viz_toolbar.addWidget(QLabel("View:"))
+        viz_toolbar.addWidget(self.view_mode)
+        viz_toolbar.addWidget(QLabel("Floor:"))
+        viz_toolbar.addWidget(self.floor_selector)
+        viz_toolbar.addWidget(QLabel("Scale:"))
+        viz_toolbar.addWidget(self.scale_slider)
+        viz_toolbar.addWidget(self.show_grid)
+        viz_toolbar.addWidget(self.show_ticks)
+        viz_toolbar.addWidget(self.show_grid_labels)
+        viz_toolbar.addWidget(self.show_beam_marks)
+        viz_toolbar.addWidget(reset_view_btn)
+        viz_toolbar.addStretch()
+        
+        viz_layout.addLayout(viz_toolbar)
+
         layout.addLayout(viz_layout, stretch=1)
+
+        # Trigger initial visibility state after all UI components are initialized
+        self.on_sidebar_changed(self.sidebar_selector.currentText())
+        self.update_floor_levels()
 
     # --- LOGIC METHODS ---
 
+    def on_global_frame_selected(self, name):
+        if not name or name == self.current_frame_name:
+            return
+        items = self.frame_list.findItems(name, Qt.MatchFlag.MatchExactly)
+        if items:
+            self.frame_list.setCurrentItem(items[0])
+            self.ss = self.frames[name].system
+
     def on_sidebar_changed(self, text):
-        if text == "Grid":
+        # Hide active frame selector for Frames and Grid sections
+        show_active_frame = text not in ["Frames", "Grid", "Slabs"]
+        self.active_frame_label.setVisible(show_active_frame)
+        self.global_frame_selector.setVisible(show_active_frame)
+
+        if text == "Slabs":
+            self.view_mode.setCurrentText("Grid Plan")
+            self.update_plot()
+        elif text == "Grid":
             self.sync_grid_frame_combos()
+        elif text == "Element Manager":
+            self.element_mgr_widget.refresh_data()
 
     def sync_grid_frame_combos(self):
         """Updates the frame selection combo boxes in the grid table."""
@@ -677,15 +953,41 @@ class StructuralApp(QMainWindow):
     def add_grid_assignment(self):
         self.grid_table.blockSignals(True)
         row = self.grid_table.rowCount()
-        self.grid_table.insertRow(row)
-        self.grid_table.setItem(row, 0, QTableWidgetItem("A"))
         
+        # Default values
+        new_label = "A"
+        prev_frame = ""
+        prev_offset = "0"
+        
+        if row > 0:
+            # Get previous row data
+            prev_label = self.grid_table.item(row - 1, 0).text()
+            prev_frame_combo = self.grid_table.cellWidget(row - 1, 1)
+            prev_frame = prev_frame_combo.currentText() if prev_frame_combo else ""
+            prev_offset = self.grid_table.item(row - 1, 2).text()
+            
+            # Increment label
+            if prev_label.isdigit():
+                new_label = str(int(prev_label) + 1)
+            elif len(prev_label) == 1 and prev_label.isalpha():
+                if prev_label.upper() == 'Z':
+                    new_label = 'AA'
+                else:
+                    new_label = chr(ord(prev_label.upper()) + 1)
+            else:
+                new_label = prev_label
+
+        self.grid_table.insertRow(row)
+        self.grid_table.setItem(row, 0, QTableWidgetItem(new_label))
+
         combo = QComboBox()
         combo.addItems(list(self.frames.keys()))
+        if prev_frame in self.frames:
+            combo.setCurrentText(prev_frame)
         combo.currentTextChanged.connect(self.update_plot)
         self.grid_table.setCellWidget(row, 1, combo)
         
-        self.grid_table.setItem(row, 2, QTableWidgetItem("0"))
+        self.grid_table.setItem(row, 2, QTableWidgetItem(prev_offset))
         self.grid_table.blockSignals(False)
         self.update_plot()
 
@@ -695,21 +997,212 @@ class StructuralApp(QMainWindow):
             self.grid_table.removeRow(row)
         self.update_plot()
 
+    def add_slab(self):
+        row = self.slabs_table.rowCount()
+        self.slabs_table.blockSignals(True)
+        self.slabs_table.insertRow(row)
+        name = f"Slab {row + 1}"
+        self.slabs_table.setItem(row, 0, QTableWidgetItem(name))
+        self.slabs_table.setItem(row, 1, QTableWidgetItem("A1, A2, B2, B1"))
+        self.slabs_table.setItem(row, 2, QTableWidgetItem("5.0"))
+        self.slabs_table.blockSignals(False)
+        self.on_slab_data_changed()
+
+    def delete_slab(self):
+        rows = sorted(set(i.row() for i in self.slabs_table.selectedIndexes()), reverse=True)
+        for row in rows:
+            self.slabs_table.removeRow(row)
+        self.on_slab_data_changed()
+
+    def on_slab_data_changed(self):
+        self.slabs = {}
+        for row in range(self.slabs_table.rowCount()):
+            try:
+                name = self.slabs_table.item(row, 0).text()
+                pts_str = self.slabs_table.item(row, 1).text()
+                load = float(self.slabs_table.item(row, 2).text())
+                
+                pts = []
+                for p_str in pts_str.split(','):
+                    parsed = self.parse_grid_point(p_str)
+                    if parsed: pts.append(parsed)
+                
+                if pts:
+                    self.slabs[name] = {'points': pts, 'load': load}
+            except (ValueError, AttributeError): continue
+        self.update_plot()
+
+    def parse_grid_point(self, pt_str):
+        pt_str = pt_str.strip().upper()
+        if not pt_str: return None
+        i = 0
+        while i < len(pt_str) and pt_str[i].isalpha(): i += 1
+        y_label, x_label = pt_str[:i], pt_str[i:]
+        if not y_label or not x_label or not x_label.isdigit(): return None
+        y_idx = string.ascii_uppercase.find(y_label)
+        x_idx = int(x_label) - 1
+        return x_idx, y_idx
+
+    def distribute_slab_loads(self):
+        """Distributes slab pressure loads to beams using tributary area method."""
+        if not self.slabs: return
+        
+        # 1. Get Grid Coordinates
+        try:
+            sx = [float(s.strip()) for s in self.grid_x_input.text().split(',') if s.strip()]
+            sy = [float(s.strip()) for s in self.grid_y_input.text().split(',') if s.strip()]
+        except ValueError: return
+        gx = [0.0] + list(np.cumsum(sx))
+        gy = [0.0] + list(np.cumsum(sy))
+
+        # 2. Get Selected Height
+        try:
+            sel_text = self.floor_selector.currentText()
+            sel_height = float(sel_text.split('(')[1].split('m')[0])
+        except (IndexError, ValueError): sel_height = 0.0
+
+        # 3. Map Grid Lines to Frames
+        grid_mapping = {} # {line_label: (frame_name, offset)}
+        for row in range(self.grid_table.rowCount()):
+            line = self.grid_table.item(row, 0).text().upper()
+            frame = self.grid_table.cellWidget(row, 1).currentText()
+            try: offset = float(self.grid_table.item(row, 2).text())
+            except ValueError: offset = 0.0
+            grid_mapping[line] = (frame, offset)
+
+        # 4. Process each slab
+        for name, data in self.slabs.items():
+            pts = data['points']
+            w = data['load']
+            
+            # Detect if rectangular (simple case)
+            x_indices = sorted(list(set(p[0] for p in pts)))
+            y_indices = sorted(list(set(p[1] for p in pts)))
+            
+            if len(x_indices) == 2 and len(y_indices) == 2 and len(pts) >= 4:
+                # Rectangular slab
+                x1_idx, x2_idx = x_indices[0], x_indices[1]
+                y1_idx, y2_idx = y_indices[0], y_indices[1]
+                
+                Lx = gx[x2_idx] - gx[x1_idx]
+                Ly = gy[y2_idx] - gy[y1_idx]
+                
+                # Edges: (Line, StartCoord, EndCoord, IsVerticalLine)
+                x1_lbl, x2_label = str(x1_idx + 1), str(x2_idx + 1)
+                y1_lbl = string.ascii_uppercase[y1_idx] if y1_idx < 26 else f"Z{y1_idx}"
+                y2_lbl = string.ascii_uppercase[y2_idx] if y2_idx < 26 else f"Z{y2_idx}"
+                
+                edges = [
+                    (y1_lbl, gx[x1_idx], gx[x2_idx], False), # Bottom
+                    (y2_lbl, gx[x1_idx], gx[x2_idx], False), # Top
+                    (x1_lbl, gy[y1_idx], gy[y2_idx], True),  # Left
+                    (x2_label, gy[y1_idx], gy[y2_idx], True)  # Right
+                ]
+                
+                short_dim = min(Lx, Ly)
+                peak = w * short_dim / 2.0
+                
+                for line, start, end, is_vert in edges:
+                    if line not in grid_mapping: continue
+                    fname, offset = grid_mapping[line]
+                    f_ss = self.frames[fname]
+                    
+                    f_start = start - (gx[0] if not is_vert else gy[0]) - offset
+                    f_end = end - (gx[0] if not is_vert else gy[0]) - offset
+                    
+                    target_eid = None
+                    for eid, el in f_ss.element_map.items():
+                        n1, n2 = f_ss.node_map[el.node_id1].vertex, f_ss.node_map[el.node_id2].vertex
+                        if np.isclose(n1.y, sel_height) and np.isclose(n2.y, sel_height):
+                            coords = sorted([n1.x, n2.x])
+                            if np.isclose(coords[0], f_start) and np.isclose(coords[1], f_end):
+                                target_eid = eid; break
+                    
+                    if target_eid is None: continue
+                    
+                    # Apply load
+                    edge_len = end - start
+                    if np.isclose(edge_len, short_dim):
+                        # Triangular load
+                        self.apply_specialized_load(fname, target_eid, "Triangular (Peak Mid)", peak, 0.5)
+                    else:
+                        # Trapezoidal load
+                        pos1 = (short_dim / 2.0) / edge_len
+                        pos2 = 1.0 - pos1
+                        self.apply_specialized_load(fname, target_eid, "Trapezoidal (Uniform Mid)", peak, pos1, pos2)
+            else:
+                # Irregular slab: Fallback or simplified distribution could be added here
+                pass
+
+        self.update_plot()
+        QMessageBox.information(self, "Success", "Slab loads distributed to frames.")
+
+    def apply_specialized_load(self, frame_name, eid, ltype, peak, pos1, pos2=0.75):
+        """Helper to apply split-element loads to a specific frame."""
+        model = self.frames[frame_name]
+        idx = eid - 1
+        if idx < 0 or idx >= len(model.elements): return
+        
+        el_data = model.elements[idx]
+        n1_loc, n2_loc = el_data['loc']
+        ea, ei = el_data['EA'], el_data['EI']
+        
+        model.elements.pop(idx)
+        model.q_loads = [q for q in model.q_loads if q['element_idx'] != idx]
+        for q in model.q_loads:
+            if q['element_idx'] > idx: q['element_idx'] -= 1
+
+        if ltype == "Triangular (Peak Mid)":
+            mid = [float(n1_loc[0] + (n2_loc[0] - n1_loc[0]) * pos1), float(n1_loc[1] + (n2_loc[1] - n1_loc[1]) * pos1)]
+            model.elements.append({'loc': [n1_loc, mid], 'EA': ea, 'EI': ei})
+            model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [0, peak], 'dir': 'y', 'qp': 0})
+            model.elements.append({'loc': [mid, n2_loc], 'EA': ea, 'EI': ei})
+            model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, 0], 'dir': 'y', 'qp': 0})
+        else:
+            p1 = [float(n1_loc[0] + (n2_loc[0] - n1_loc[0]) * pos1), float(n1_loc[1] + (n2_loc[1] - n1_loc[1]) * pos1)]
+            p2 = [float(n1_loc[0] + (n2_loc[0] - n1_loc[0]) * pos2), float(n1_loc[1] + (n2_loc[1] - n1_loc[1]) * pos2)]
+            model.elements.append({'loc': [n1_loc, p1], 'EA': ea, 'EI': ei})
+            model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [0, peak], 'dir': 'y', 'qp': 0})
+            model.elements.append({'loc': [p1, p2], 'EA': ea, 'EI': ei})
+            model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, peak], 'dir': 'y', 'qp': 0})
+            model.elements.append({'loc': [p2, n2_loc], 'EA': ea, 'EI': ei})
+            model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, 0], 'dir': 'y', 'qp': 0})
+
+        old_active = self.current_frame_name
+        self.current_frame_name = frame_name
+        self.rebuild_system()
+        self.current_frame_name = old_active
+
     def add_frame(self):
-        name, ok = QInputDialog.getText(self, "New Frame", "Enter frame name:")
+        default_name = f"Frame {len(self.frames) + 1}"
+        name, ok = QInputDialog.getText(self, "New Frame", "Enter frame name:", text=default_name)
         if ok and name:
             if name in self.frames:
                 QMessageBox.warning(self, "Error", "Frame name already exists.")
                 return
-            self.frames[name] = SystemElements()
+            self.frames[name] = FrameModel()
             self.frame_list.addItem(name)
+            self.global_frame_selector.addItem(name)
             self.frame_list.setCurrentItem(self.frame_list.findItems(name, Qt.MatchFlag.MatchExactly)[0])
 
     def switch_frame(self):
         selected = self.frame_list.selectedItems()
         if not selected: return
         self.current_frame_name = selected[0].text()
-        self.ss = self.frames[self.current_frame_name]
+        self.ss = self.frames[self.current_frame_name].system
+
+        # Sync Global Selector
+        self.global_frame_selector.blockSignals(True)
+        self.global_frame_selector.setCurrentText(self.current_frame_name)
+        self.global_frame_selector.blockSignals(False)
+
+        # Rebuild the system to ensure all internal state is fresh
+        self.rebuild_system()
+
+        # Sync Element Manager if active
+        if hasattr(self, 'element_mgr_widget') and self.sidebar_selector.currentText() == "Element Manager":
+            self.element_mgr_widget.refresh_data()
+            
         self.reset_view() # Auto-fit when switching
 
     def rename_frame(self):
@@ -724,6 +1217,10 @@ class StructuralApp(QMainWindow):
             self.frames[new_name] = self.frames.pop(old_name)
             curr_item.setText(new_name)
             self.current_frame_name = new_name
+            # Update combo box
+            idx = self.global_frame_selector.findText(old_name)
+            if idx != -1:
+                self.global_frame_selector.setItemText(idx, new_name)
 
     def delete_frame(self):
         if self.frame_list.count() <= 1:
@@ -737,6 +1234,57 @@ class StructuralApp(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             self.frames.pop(name)
             self.frame_list.takeItem(self.frame_list.row(curr_item))
+            # Update combo box
+            idx = self.global_frame_selector.findText(name)
+            if idx != -1:
+                self.global_frame_selector.removeItem(idx)
+
+    def add_z_level(self):
+        row = self.grid_z_table.rowCount()
+        self.grid_z_table.blockSignals(True)
+        self.grid_z_table.insertRow(row)
+        last_elev = 0.0
+        if row > 0:
+            try: last_elev = float(self.grid_z_table.item(row-1, 1).text())
+            except: pass
+        self.grid_z_table.setItem(row, 0, QTableWidgetItem(f"Floor {row+1}"))
+        self.grid_z_table.setItem(row, 1, QTableWidgetItem(str(last_elev + 3.5)))
+        self.grid_z_table.blockSignals(False)
+        self.update_floor_levels()
+
+    def delete_z_level(self):
+        rows = sorted(set(i.row() for i in self.grid_z_table.selectedIndexes()), reverse=True)
+        for row in rows:
+            self.grid_z_table.removeRow(row)
+        self.update_floor_levels()
+
+    def update_floor_levels(self):
+        """Populates the floor level selector based on grid elevations."""
+        levels = []
+        elevs = []
+        for row in range(self.grid_z_table.rowCount()):
+            try:
+                name = self.grid_z_table.item(row, 0).text()
+                elev = float(self.grid_z_table.item(row, 1).text())
+                elevs.append((elev, name))
+            except (ValueError, AttributeError): continue
+        
+        # Sort by elevation to ensure dropdown is logical
+        elevs.sort()
+        for elev, name in elevs:
+            levels.append(f"{name} ({elev:.2f}m)")
+        
+        # Debug output
+        print(f"DEBUG: Populating floor levels: {levels}")
+        
+        self.floor_selector.blockSignals(True)
+        current_sel = self.floor_selector.currentText()
+        self.floor_selector.clear()
+        self.floor_selector.addItems(levels)
+        if current_sel in levels:
+            self.floor_selector.setCurrentText(current_sel)
+        self.floor_selector.blockSignals(False)
+        self.update_plot()
 
     def duplicate_frame(self):
         curr_item = self.frame_list.currentItem()
@@ -744,59 +1292,70 @@ class StructuralApp(QMainWindow):
         old_name = curr_item.text()
         new_name = f"{old_name} (Copy)"
         
-        state = self.get_ss_state(self.frames[old_name])
-        new_ss = SystemElements()
-        self.apply_ss_state(new_ss, state)
+        # Ensure old blueprint is in sync
+        old_model = self.frames[old_name]
+        self.sync_blueprint_from_system(old_model.system, old_model)
         
-        self.frames[new_name] = new_ss
+        # Deep copy blueprint data
+        import copy
+        new_model = FrameModel()
+        new_model.elements = copy.deepcopy(old_model.elements)
+        new_model.supports = copy.deepcopy(old_model.supports)
+        new_model.point_loads = copy.deepcopy(old_model.point_loads)
+        new_model.moment_loads = copy.deepcopy(old_model.moment_loads)
+        new_model.q_loads = copy.deepcopy(old_model.q_loads)
+        
+        self.frames[new_name] = new_model
         self.frame_list.addItem(new_name)
+        self.global_frame_selector.addItem(new_name)
         self.frame_list.setCurrentItem(self.frame_list.findItems(new_name, Qt.MatchFlag.MatchExactly)[0])
 
-    def get_ss_state(self, ss):
-        elements = []
+    def sync_blueprint_from_system(self, ss, model):
+        """Scrapes the current SystemElements state into the FrameModel blueprint."""
+        model.elements.clear()
+        model.supports.clear()
+        model.point_loads.clear()
+        model.moment_loads.clear()
+        model.q_loads.clear()
+        
         for el in ss.element_map.values():
             n1, n2 = ss.node_map[el.node_id1].vertex, ss.node_map[el.node_id2].vertex
-            elements.append({'loc': [[n1.x, n1.y], [n2.x, n2.y]], 'EA': el.EA, 'EI': el.EI})
-        fixed = [n.id for n in ss.supports_fixed]
-        hinged = [n.id for n in ss.supports_hinged]
-        rolls = []
-        if hasattr(ss, 'supports_roll'):
-            for i, node in enumerate(ss.supports_roll):
-                rolls.append((node.id, ss.supports_roll_direction[i]))
-        springs = []
-        if hasattr(ss, 'supports_spring_args'):
-            springs = [s for s in ss.supports_spring_args]
-        return {
-            'elements': elements, 'fixed': fixed, 'hinged': hinged, 'rolls': rolls, 'springs': springs,
-            'p_loads': ss.loads_point.copy(), 'm_loads': ss.loads_moment.copy(), 'q_loads': ss.loads_q.copy()
-        }
+            model.elements.append({'loc': [[n1.x, n1.y], [n2.x, n2.y]], 'EA': el.EA, 'EI': el.EI})
+            if el.id in ss.loads_q:
+                # Use attributes from the Element object to preserve user intent (direction and sign)
+                q_val = getattr(el, 'q_load', 0)
+                d_val = getattr(el, 'q_direction', 'element')
+                qp_val = getattr(el, 'q_perp_load', 0)
+                
+                # Ensure values are JSON serializable and consistent (convert numpy/tuples to lists)
+                if isinstance(q_val, (np.ndarray, tuple)): q_val = list(q_val)
+                if isinstance(qp_val, (np.ndarray, tuple)): qp_val = list(qp_val)
+                
+                model.q_loads.append({'element_idx': len(model.elements)-1, 'q': q_val, 'dir': d_val, 'qp': qp_val})
 
-    def apply_ss_state(self, ss, state):
-        for e in state['elements']: ss.add_element(location=e['loc'], EA=e['EA'], EI=e['EI'])
-        for nid in state['fixed']: 
-            if nid in ss.node_map: ss.add_support_fixed(node_id=nid)
-        for nid in state['hinged']: 
-            if nid in ss.node_map: ss.add_support_hinged(node_id=nid)
-        for nid, d in state['rolls']: 
-            if nid in ss.node_map: ss.add_support_roll(node_id=nid, direction=d)
-        for s in state['springs']:
-            if s[0] in ss.node_map: ss.add_support_spring(node_id=s[0], translation=s[1], k=s[2], roll=s[3])
-        for nid, data in state['p_loads'].items():
-            if nid in ss.node_map:
-                fx, fz = (data[0], data[1]) if isinstance(data, (list, tuple)) else (data.get('Fx', 0), data.get('Fz', 0))
-                ss.point_load(node_id=nid, Fx=fx, Fz=fz)
-        for nid, data in state['m_loads'].items():
-            if nid in ss.node_map:
-                ty = data[0] if isinstance(data, (list, tuple)) else (data.get('Ty', 0) if isinstance(data, dict) else data)
-                ss.moment_load(node_id=nid, Ty=ty)
-        for eid, data in state['q_loads'].items():
-            if eid in ss.element_map:
-                q, d = (data[0], data[1]) if isinstance(data, (list, tuple)) else (data.get('q', 0), data.get('direction', ''))
-                ss.q_load(q=q, element_id=eid, direction=d)
+        for n in ss.supports_fixed: model.supports.append({'loc': [n.vertex.x, n.vertex.y], 'type': 'fixed', 'args': {}})
+        for n in ss.supports_hinged: model.supports.append({'loc': [n.vertex.x, n.vertex.y], 'type': 'hinged', 'args': {}})
+        if hasattr(ss, 'supports_roll'):
+            for i, n in enumerate(ss.supports_roll):
+                model.supports.append({'loc': [n.vertex.x, n.vertex.y], 'type': 'roll', 'args': {'direction': ss.supports_roll_direction[i]}})
+        if hasattr(ss, 'supports_spring_args'):
+            for nid, trans, k, roll in ss.supports_spring_args:
+                v = ss.node_map[nid].vertex
+                model.supports.append({'loc': [v.x, v.y], 'type': 'spring', 'args': {'translation': trans, 'k': k, 'roll': roll}})
+
+        for nid, data in ss.loads_point.items():
+            v = ss.node_map[nid].vertex
+            fx, fz = (data[0], data[1]) if isinstance(data, (list, tuple)) else (data.get('Fx', 0), data.get('Fz', 0))
+            model.point_loads.append({'loc': [v.x, v.y], 'Fx': fx, 'Fz': fz})
+        for nid, data in ss.loads_moment.items():
+            v = ss.node_map[nid].vertex
+            ty = data[0] if isinstance(data, (list, tuple)) else (data.get('Ty', 0) if isinstance(data, dict) else data)
+            model.moment_loads.append({'loc': [v.x, v.y], 'Ty': ty})
 
     # --- PAN & ZOOM HANDLERS ---
     def on_scroll(self, event):
         if event.inaxes != self.ax: return
+        self.ax.set_aspect('equal', adjustable='box')
         base_scale = 1.2
         scale_factor = 1 / base_scale if event.button == 'up' else base_scale
         x_min, x_max = self.ax.get_xlim(); y_min, y_max = self.ax.get_ylim()
@@ -809,6 +1368,7 @@ class StructuralApp(QMainWindow):
 
     def on_press(self, event):
         if event.button == 2: 
+            self.ax.set_aspect('equal', adjustable='box')
             self.press = event.x, event.y, self.ax.get_xlim(), self.ax.get_ylim()
 
     def on_release(self, event): self.press = None
@@ -840,9 +1400,9 @@ class StructuralApp(QMainWindow):
         return float(self.ea_input.text()), float(self.ei_input.text())
 
     def reset_system(self):
-        self.ss = SystemElements()
-        self.frames[self.current_frame_name] = self.ss
-        self.update_plot()
+        self.frames[self.current_frame_name].clear()
+        self.ss = self.frames[self.current_frame_name].system
+        self.rebuild_system()
 
     def add_manual_element(self, element_type='frame'):
         try:
@@ -850,12 +1410,9 @@ class StructuralApp(QMainWindow):
             p1 = [float(self.x1.text()), float(self.y1.text())]
             p2 = [float(self.x2.text()), float(self.y2.text())]
             
-            if element_type == 'truss':
-                self.ss.add_element(location=[p1, p2], EA=ea)
-            else:
-                self.ss.add_element(location=[p1, p2], EA=ea, EI=ei)
-                
-            self.update_plot()
+            model = self.frames[self.current_frame_name]
+            model.elements.append({'loc': [p1, p2], 'EA': ea, 'EI': ei if element_type == 'frame' else 0})
+            self.rebuild_system()
             
             # Move end node to start node
             self.x1.setText(self.x2.text())
@@ -868,8 +1425,8 @@ class StructuralApp(QMainWindow):
     def build_truss_towers(self):
         """Internalized logic for triangle-based towers"""
         try:
-            self.ss = SystemElements()
-            self.frames[self.current_frame_name] = self.ss
+            model = self.frames[self.current_frame_name]
+            model.clear()
             width = float(self.tower_width.text())
             span = float(self.tower_span.text())
             q_horiz = float(self.tower_q_horiz.text())
@@ -881,253 +1438,279 @@ class StructuralApp(QMainWindow):
             x -= x.min()
 
             for length in [0, span]:
+                # Use a temporary system to leverage add_element_grid helper
+                temp_ss = SystemElements()
+                temp_ss.add_element_grid(x + length, y, element_type='truss', EA=ea)
+                
                 x_left_column = np.ones(y[::2].shape) * x.min() + length
                 x_right_column = np.ones(y[::2].shape[0] + 1) * x.max() + length
-
-                # add triangles
-                self.ss.add_element_grid(x + length, y, element_type='truss', EA=ea)
-                # add vertical elements
-                self.ss.add_element_grid(x_left_column, y[::2], element_type='truss', EA=ea)
-                self.ss.add_element_grid(x_right_column, np.r_[y[0], y[1::2], y[-1]], element_type='truss', EA=ea)
-
-                # Add spring supports at the base of each tower
-                nid_left = self.ss.find_node_id(vertex=[x_left_column[0], y[0]])
-                if nid_left:
-                    self.ss.add_support_spring(node_id=nid_left, translation=2, k=k)
+                temp_ss.add_element_grid(x_left_column, y[::2], element_type='truss', EA=ea)
+                temp_ss.add_element_grid(x_right_column, np.r_[y[0], y[1::2], y[-1]], element_type='truss', EA=ea)
                 
-                nid_right = self.ss.find_node_id(vertex=[x_right_column[0], y[0]])
-                if nid_right:
-                    self.ss.add_support_spring(node_id=nid_right, translation=2, k=k)
+                for el in temp_ss.element_map.values():
+                    n1, n2 = temp_ss.node_map[el.node_id1].vertex, temp_ss.node_map[el.node_id2].vertex
+                    model.elements.append({'loc': [[n1.x, n1.y], [n2.x, n2.y]], 'EA': el.EA, 'EI': el.EI})
+
+                model.supports.append({'loc': [x_left_column[0], y[0]], 'type': 'spring', 'args': {'translation': 2, 'k': k}})
+                model.supports.append({'loc': [x_right_column[0], y[0]], 'type': 'spring', 'args': {'translation': 2, 'k': k}})
             
-            self.ss.add_element_grid([0, width, span, span + width], np.ones(4) * y.max(), EI=ei)
+            # Top beam
+            model.elements.append({'loc': [[0, y.max()], [width, y.max()]], 'EA': ea, 'EI': ei})
+            model.elements.append({'loc': [[width, y.max()], [span, y.max()]], 'EA': ea, 'EI': ei})
+            model.elements.append({'loc': [[span, y.max()], [span + width, y.max()]], 'EA': ea, 'EI': ei})
 
-            # Add stability elements at the bottom.
-            self.ss.add_truss_element(location=[[0, y.min()], [width, y.min()]], EA=ea)
-            self.ss.add_truss_element(location=[[span, y.min()], [span + width, y.min()]], EA=ea)
+            # Stability elements
+            model.elements.append({'loc': [[0, y.min()], [width, y.min()]], 'EA': ea, 'EI': 0})
+            model.elements.append({'loc': [[span, y.min()], [span + width, y.min()]], 'EA': ea, 'EI': 0})
 
-            # Apply horizontal UDL to vertical elements (e.g., wind load)
             if q_horiz != 0:
-                for el in self.ss.element_map.values():
-                    # apply wind load on elements that are vertical
-                    if np.isclose(np.sin(el.angle), 1):
-                        self.ss.q_load(q=q_horiz, element_id=el.id, direction='x')
-
-            self.update_plot()
+                for i, e in enumerate(model.elements):
+                    dx = e['loc'][1][0] - e['loc'][0][0]
+                    dy = e['loc'][1][1] - e['loc'][0][1]
+                    if np.isclose(dx, 0) and not np.isclose(dy, 0):
+                        model.q_loads.append({'element_idx': i, 'q': q_horiz, 'dir': 'x', 'qp': 0})
+            
+            self.rebuild_system()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
     def build_frame_grid(self):
         """Generates a multi-bay, multi-floor frame grid."""
         try:
-            self.ss = SystemElements()
-            self.frames[self.current_frame_name] = self.ss
+            model = self.frames[self.current_frame_name]
+            model.clear()
             ea, ei = self.get_material()
             
             w = float(self.frame_bay_w.text())
-            h = float(self.frame_bay_h.text())
             n_bays = int(self.frame_n_bays.text())
             n_floors = int(self.frame_n_floors.text())
-            sup_type = self.frame_sup_type.currentText()
-
-            gb_enabled = self.frame_ground_beam.isChecked()
-            gb_h = float(self.frame_gb_height.text()) if gb_enabled else 0
+            sup_type = self.frame_sup_type.currentText().lower()
             
+            # Parse elevations from Grid Manager Table
+            elevs = []
+            for row in range(self.grid_z_table.rowCount()):
+                try:
+                    elevs.append(float(self.grid_z_table.item(row, 1).text()))
+                except (ValueError, AttributeError): continue
+            elevs.sort()
+            
+            if not elevs:
+                elevs = [-2.0, 0.0, 3.5]
+            
+            target_segments = n_floors + 1
+            while len(elevs) < target_segments + 1:
+                step = elevs[-1] - elevs[-2] if len(elevs) >= 2 else 3.5
+                elevs.append(elevs[-1] + step)
+            
+            y_coords = elevs[:target_segments + 1]
+
             try:
                 q_vals = [float(x.strip()) for x in self.frame_q_loads.text().split(',')]
             except ValueError:
                 q_vals = [-10.0]
 
-            # Loop through floors
-            for floor in range(n_floors):
-                y_bot = floor * h
-                y_top = (floor + 1) * h
+            # Loop through segments
+            for i in range(len(y_coords) - 1):
+                y_bot = y_coords[i]
+                y_top = y_coords[i+1]
                 
                 # Columns
                 for bay in range(n_bays + 1):
                     x = bay * w
+                    model.elements.append({'loc': [[x, y_bot], [x, y_top]], 'EA': ea, 'EI': ei})
                     
-                    if floor == 0 and gb_enabled:
-                        # Split first floor column for ground beam
-                        self.ss.add_element(location=[[x, 0], [x, gb_h]], EA=ea, EI=ei)
-                        self.ss.add_element(location=[[x, gb_h], [x, y_top]], EA=ea, EI=ei)
-                    else:
-                        self.ss.add_element(location=[[x, y_bot], [x, y_top]], EA=ea, EI=ei)
-                    
-                    # Foundation supports at the very bottom
-                    if floor == 0:
-                        nid = self.ss.find_node_id(vertex=[x, 0])
-                        if nid:
-                            if sup_type == "Hinged":
-                                self.ss.add_support_hinged(node_id=nid)
-                            elif sup_type == "Fixed":
-                                self.ss.add_support_fixed(node_id=nid)
+                    # Foundation supports at the very bottom (Footing level)
+                    if i == 0:
+                        model.supports.append({'loc': [x, y_bot], 'type': sup_type, 'args': {}})
                 
-                # Beams at y_top
-                q_idx = floor + (1 if gb_enabled else 0)
-                q = q_vals[q_idx] if q_idx < len(q_vals) else q_vals[-1]
-                
+                # Beams at y_top (Ground Floor or Floor levels)
+                q = q_vals[i] if i < len(q_vals) else q_vals[-1]
                 for bay in range(n_bays):
                     x_left = bay * w
                     x_right = (bay + 1) * w
-                    eid = self.ss.add_element(location=[[x_left, y_top], [x_right, y_top]], EA=ea, EI=ei)
+                    model.elements.append({'loc': [[x_left, y_top], [x_right, y_top]], 'EA': ea, 'EI': ei})
                     if q != 0:
-                        self.ss.q_load(q=q, element_id=eid, direction='y')
-
-            # Add Ground Beams at gb_h
-            if gb_enabled:
-                q = q_vals[0]
-                for bay in range(n_bays):
-                    x_left = bay * w
-                    x_right = (bay + 1) * w
-                    eid = self.ss.add_element(location=[[x_left, gb_h], [x_right, gb_h]], EA=ea, EI=ei)
-                    if q != 0:
-                        self.ss.q_load(q=q, element_id=eid, direction='y')
-
-            self.update_plot()
+                        # Ensure gravity loads are negative (downward)
+                        model.q_loads.append({'element_idx': len(model.elements)-1, 'q': -abs(q), 'dir': 'y', 'qp': 0})
+            
+            self.rebuild_system()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
     def build_combined_structure(self):
         """Generates a 2-story frame with a truss roof."""
         try:
-            self.ss = SystemElements()
-            self.frames[self.current_frame_name] = self.ss
+            model = self.frames[self.current_frame_name]
+            model.clear()
             ea, ei = self.get_material()
             
             w = float(self.comb_width.text())
             h = float(self.comb_h_story.text())
             hr = float(self.comb_h_roof.text())
-            q_floor = float(self.comb_q_floor.text())
-            q_roof = float(self.comb_q_roof.text())
+            q_floor = -abs(float(self.comb_q_floor.text()))
+            q_roof = -abs(float(self.comb_q_roof.text()))
 
             # 1. Frame Structure (2 stories)
             # Columns
-            self.ss.add_element(location=[[0, 0], [0, h]], EA=ea, EI=ei)
-            self.ss.add_element(location=[[w, 0], [w, h]], EA=ea, EI=ei)
-            self.ss.add_element(location=[[0, h], [0, 2*h]], EA=ea, EI=ei)
-            self.ss.add_element(location=[[w, h], [w, 2*h]], EA=ea, EI=ei)
+            model.elements.append({'loc': [[0, 0], [0, h]], 'EA': ea, 'EI': ei})
+            model.elements.append({'loc': [[w, 0], [w, h]], 'EA': ea, 'EI': ei})
+            model.elements.append({'loc': [[0, h], [0, 2*h]], 'EA': ea, 'EI': ei})
+            model.elements.append({'loc': [[w, h], [w, 2*h]], 'EA': ea, 'EI': ei})
             
             # Beams
-            b1 = self.ss.add_element(location=[[0, h], [w, h]], EA=ea, EI=ei)
-            b2 = self.ss.add_element(location=[[0, 2*h], [w, 2*h]], EA=ea, EI=ei)
+            model.elements.append({'loc': [[0, h], [w, h]], 'EA': ea, 'EI': ei})
+            if q_floor != 0:
+                model.q_loads.append({'element_idx': len(model.elements)-1, 'q': q_floor, 'dir': 'y', 'qp': 0})
             
+            model.elements.append({'loc': [[0, 2*h], [w, 2*h]], 'EA': ea, 'EI': ei})
+            if q_floor != 0:
+                model.q_loads.append({'element_idx': len(model.elements)-1, 'q': q_floor, 'dir': 'y', 'qp': 0})
+
             # Supports
-            n1 = self.ss.find_node_id(vertex=[0, 0])
-            n2 = self.ss.find_node_id(vertex=[w, 0])
-            if n1: self.ss.add_support_fixed(node_id=n1)
-            if n2: self.ss.add_support_fixed(node_id=n2)
+            model.supports.append({'loc': [0, 0], 'type': 'fixed', 'args': {}})
+            model.supports.append({'loc': [w, 0], 'type': 'fixed', 'args': {}})
             
             # 2. Truss Roof
             # Rafters
-            r1 = self.ss.add_element(location=[[0, 2*h], [w/2, 2*h + hr]], element_type='truss', EA=ea)
-            r2 = self.ss.add_element(location=[[w, 2*h], [w/2, 2*h + hr]], element_type='truss', EA=ea)
-            
-            # 3. Loads
-            if q_floor != 0:
-                self.ss.q_load(q=q_floor, element_id=b1, direction='y')
-                self.ss.q_load(q=q_floor, element_id=b2, direction='y')
-            
+            model.elements.append({'loc': [[0, 2*h], [w/2, 2*h + hr]], 'EA': ea, 'EI': 0})
             if q_roof != 0:
-                self.ss.q_load(q=q_roof, element_id=r1, direction='y')
-                self.ss.q_load(q=q_roof, element_id=r2, direction='y')
-
-            self.update_plot()
+                model.q_loads.append({'element_idx': len(model.elements)-1, 'q': q_roof, 'dir': 'y', 'qp': 0})
+                
+            model.elements.append({'loc': [[w, 2*h], [w/2, 2*h + hr]], 'EA': ea, 'EI': 0})
+            if q_roof != 0:
+                model.q_loads.append({'element_idx': len(model.elements)-1, 'q': q_roof, 'dir': 'y', 'qp': 0})
+            
+            self.rebuild_system()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def rebuild_system(self, node_coords=None, element_props=None):
-        """
-        Rebuilds the SystemElements object from the current state of element_map, 
-        supports, and loads. This ensures all internal cached values (stiffness 
-        matrices, lengths, angles) are correctly recomputed.
-        """
-        # 1. Capture current state
-        elements = []
-        for el_id in sorted(self.ss.element_map.keys()):
-            el = self.ss.element_map[el_id]
+    def build_test_frame(self, n_bays):
+        """Generates a test frame matching current grid settings."""
+        try:
+            model = self.frames[self.current_frame_name]
+            model.clear()
+            ea, ei = self.get_material()
             
-            # Get coordinates, prioritizing node_coords override from Element Manager
-            if node_coords and el.node_id1 in node_coords:
-                p1 = node_coords[el.node_id1]
-            else:
-                n1 = self.ss.node_map[el.node_id1].vertex
-                p1 = [n1.x, n1.y]
+            # Parse spacings from Grid Manager
+            try:
+                sx_all = [float(s.strip()) for s in self.grid_x_input.text().split(',') if s.strip()]
+            except ValueError:
+                sx_all = [5.0]
+
+            # Get elevations from table
+            elevs = []
+            for row in range(self.grid_z_table.rowCount()):
+                try:
+                    elevs.append(float(self.grid_z_table.item(row, 1).text()))
+                except (ValueError, AttributeError): continue
+            elevs.sort()
+            
+            if not elevs:
+                elevs = [-2.0, 0.0, 3.5]
+
+            # Use the requested number of bays, but take widths from the grid
+            sx = []
+            for i in range(n_bays):
+                if i < len(sx_all):
+                    sx.append(sx_all[i])
+                else:
+                    sx.append(sx_all[-1] if sx_all else 5.0)
+
+            x_coords = [0.0] + list(np.cumsum(sx))
+            y_coords = elevs
+
+            # Loop through segments
+            for i in range(len(y_coords) - 1):
+                y_bot = y_coords[i]
+                y_top = y_coords[i+1]
                 
-            if node_coords and el.node_id2 in node_coords:
-                p2 = node_coords[el.node_id2]
-            else:
-                n2 = self.ss.node_map[el.node_id2].vertex
-                p2 = [n2.x, n2.y]
+                # Columns
+                for x in x_coords:
+                    model.elements.append({'loc': [[x, y_bot], [x, y_top]], 'EA': ea, 'EI': ei})
+                    
+                    # Foundation supports at the very bottom
+                    if i == 0:
+                        model.supports.append({'loc': [x, y_bot], 'type': 'fixed', 'args': {}})
+                
+                # Beams at y_top
+                for j in range(len(x_coords) - 1):
+                    x_left = x_coords[j]
+                    x_right = x_coords[j+1]
+                    model.elements.append({'loc': [[x_left, y_top], [x_right, y_top]], 'EA': ea, 'EI': ei})
 
-            # Get EA/EI, prioritizing element_props override
-            ea = element_props[el_id]['EA'] if element_props and el_id in element_props else el.EA
-            ei = element_props[el_id]['EI'] if element_props and el_id in element_props else el.EI
+            self.rebuild_system()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
-            elements.append({
-                'location': [p1, p2], 
-                'EA': ea, 
-                'EI': ei
-            })
-            
-        fixed = [n.id for n in self.ss.supports_fixed]
-        hinged = [n.id for n in self.ss.supports_hinged]
-        rolls = []
-        if hasattr(self.ss, 'supports_roll'):
-            for i, node in enumerate(self.ss.supports_roll):
-                rolls.append((node.id, self.ss.supports_roll_direction[i]))
-        springs = []
-        if hasattr(self.ss, 'supports_spring_args'):
-            for s in self.ss.supports_spring_args:
-                springs.append(s)
+    def rebuild_system(self, node_coords=None, element_props=None, supports_info=None, loads_info=None):
+        """Rebuilds the SystemElements object from the FrameModel blueprint."""
+        model = self.frames[self.current_frame_name]
+        if node_coords or element_props or supports_info or loads_info:
+            self._update_blueprint_from_overrides(model, node_coords, element_props, supports_info, loads_info)
 
-        p_loads = self.ss.loads_point.copy()
-        m_loads = self.ss.loads_moment.copy()
-        q_loads = self.ss.loads_q.copy()
-
-        # 2. Reset the system
         self.ss = SystemElements()
-        self.frames[self.current_frame_name] = self.ss
-        
-        # 3. Re-add elements (recreates nodes and internal geometry)
-        for e in elements:
-            self.ss.add_element(location=e['location'], EA=e['EA'], EI=e['EI'])
-            
-        # 4. Re-apply supports (only if node still exists)
-        for nid in fixed: 
-            if nid in self.ss.node_map: self.ss.add_support_fixed(node_id=nid)
-        for nid in hinged: 
-            if nid in self.ss.node_map: self.ss.add_support_hinged(node_id=nid)
-        for nid, d in rolls: 
-            if nid in self.ss.node_map: self.ss.add_support_roll(node_id=nid, direction=d)
-        for s in springs:
-            if s[0] in self.ss.node_map:
-                self.ss.add_support_spring(node_id=s[0], translation=s[1], k=s[2], roll=s[3])
-            
-        # 5. Re-apply loads (only if node/element still exists)
-        for nid, data in p_loads.items():
-            if nid in self.ss.node_map:
-                if isinstance(data, (list, tuple)): fx, fz = data[0], data[1]
-                elif isinstance(data, dict): fx, fz = data.get('Fx', 0), data.get('Fz', 0)
-                else: fx, fz = 0, 0
-                self.ss.point_load(node_id=nid, Fx=fx, Fz=fz)
-        for nid, data in m_loads.items():
-            if nid in self.ss.node_map:
-                if isinstance(data, (list, tuple)): ty = data[0]
-                elif isinstance(data, dict): ty = data.get('Ty', 0)
-                else: ty = data
-                self.ss.moment_load(node_id=nid, Ty=ty)
-        for eid, data in q_loads.items():
-            if eid in self.ss.element_map:
-                if isinstance(data, (list, tuple)): q, d = data[0], data[1]
-                elif isinstance(data, dict): q, d = data.get('q', 0), data.get('direction', '')
-                else: q, d = 0, ''
-                self.ss.q_load(q=q, element_id=eid, direction=d)
+        model.system = self.ss
+        def clean_val(v):
+            if isinstance(v, (list, tuple, np.ndarray)): return [x if abs(x) > 1e-12 else 0 for x in v]
+            return v if not isinstance(v, (int, float)) or abs(v) > 1e-12 else 0
 
-        # Reset view mode to Structure to avoid plotting errors on the new system
+        for e in model.elements: self.ss.add_element(location=e['loc'], EA=e['EA'], EI=e['EI'])
+        for s in model.supports:
+            nid = self.ss.find_node_id(vertex=s['loc'])
+            if nid:
+                if s['type'] == 'fixed': self.ss.add_support_fixed(nid)
+                elif s['type'] == 'hinged': self.ss.add_support_hinged(nid)
+                elif s['type'] == 'roll': self.ss.add_support_roll(nid, direction=s['args'].get('direction', 2))
+                elif s['type'] == 'spring': self.ss.add_support_spring(nid, translation=s['args'].get('translation', 2), k=s['args'].get('k', 5000), roll=s['args'].get('roll', False))
+        
+        for p in model.point_loads:
+            nid = self.ss.find_node_id(vertex=p['loc'])
+            if nid: self.ss.point_load(nid, Fx=clean_val(p['Fx']), Fz=clean_val(p['Fz']))
+        for m in model.moment_loads:
+            nid = self.ss.find_node_id(vertex=m['loc'])
+            if nid: self.ss.moment_load(nid, Ty=clean_val(m['Ty']))
+        for q in model.q_loads:
+            eid = q['element_idx'] + 1
+            if eid in self.ss.element_map:
+                self.ss.q_load(q=clean_val(q['q']), element_id=eid, direction=q['dir'], q_perp=clean_val(q.get('qp')))
+
         if self.view_mode.currentText() == "Structure":
             self.update_plot()
         else:
             self.view_mode.setCurrentText("Structure")
+
+    def _update_blueprint_from_overrides(self, model, node_coords, element_props, supports_info, loads_info):
+        """Updates the FrameModel blueprint using data from Element Manager tables."""
+        node_map = {nid: node.vertex for nid, node in model.system.node_map.items()}
+        if element_props:
+            for eid, props in element_props.items():
+                if 0 <= eid - 1 < len(model.elements):
+                    model.elements[eid-1]['EA'], model.elements[eid-1]['EI'] = props['EA'], props['EI']
+        if node_coords:
+            for nid, coords in node_coords.items():
+                old_v = node_map.get(nid)
+                if not old_v: continue
+                for e in model.elements:
+                    if np.allclose(e['loc'][0], [old_v.x, old_v.y]): e['loc'][0] = coords
+                    if np.allclose(e['loc'][1], [old_v.x, old_v.y]): e['loc'][1] = coords
+                for s in model.supports:
+                    if np.allclose(s['loc'], [old_v.x, old_v.y]): s['loc'] = coords
+                for p in model.point_loads:
+                    if np.allclose(p['loc'], [old_v.x, old_v.y]): p['loc'] = coords
+                for m in model.moment_loads:
+                    if np.allclose(m['loc'], [old_v.x, old_v.y]): m['loc'] = coords
+        if supports_info:
+            model.supports = []
+            for nid, stype in supports_info.items():
+                v = node_map.get(nid)
+                if v: model.supports.append({'loc': [v.x, v.y], 'type': stype.lower(), 'args': {}})
+        if loads_info:
+            model.point_loads, model.moment_loads, model.q_loads = [], [], []
+            for l in loads_info:
+                v = node_map.get(l['id'])
+                if l['type'] == 'Point' and v: model.point_loads.append({'loc': [v.x, v.y], 'Fx': l['v1'], 'Fz': l['v2']})
+                elif l['type'] == 'Moment' and v: model.moment_loads.append({'loc': [v.x, v.y], 'Ty': l['v1']})
+                elif l['type'] == 'q-Load': model.q_loads.append({'element_idx': l['id'] - 1, 'q': l['v1'], 'dir': l['v2'], 'qp': l.get('v3', 0)})
 
     def apply_support(self):
         try:
@@ -1141,7 +1724,9 @@ class StructuralApp(QMainWindow):
                 self.ss.add_support_roll(node_id=nid, direction=2)
             elif stype == "Spring":
                 self.ss.add_support_spring(node_id=nid, translation=2, k=float(self.k_input.text()))
-            self.update_plot()
+            self.sync_blueprint_from_system(self.ss, self.frames[self.current_frame_name])
+            self.rebuild_system()
+            self.element_mgr_widget.refresh_data()
         except Exception as e:
             QMessageBox.warning(self, "Input Error", "Ensure Node ID exists.")
 
@@ -1149,6 +1734,16 @@ class StructuralApp(QMainWindow):
         self.k_input.setEnabled(text == "Spring")
 
     def update_load_ui(self, text):
+        # Hide all by default
+        self.lbl_val1_end.hide()
+        self.load_val1_end.hide()
+        self.lbl_val2_end.hide()
+        self.load_val2_end.hide()
+        self.lbl_pos1.hide()
+        self.load_pos1.hide()
+        self.lbl_pos2.hide()
+        self.load_pos2.hide()
+
         if text == "Point Load":
             self.lbl_load_id.setText("Node ID:")
             self.lbl_val1.setText("Fx (kN):")
@@ -1166,9 +1761,56 @@ class StructuralApp(QMainWindow):
             self.load_dir.hide()
         elif text == "q-Load":
             self.lbl_load_id.setText("Element ID:")
-            self.lbl_val1.setText("q (kN/m):")
+            self.lbl_val1.setText("q Start (kN/m):")
+            self.lbl_val1_end.setText("q End (kN/m):")
+            self.lbl_val2.setText("qp Start (kN/m):")
+            self.lbl_val2_end.setText("qp End (kN/m):")
+
+            self.lbl_val1_end.show()
+            self.load_val1_end.show()
+            self.lbl_val2.show()
+            self.load_val2.show()
+            self.lbl_val2_end.show()
+            self.load_val2_end.show()
+
+            self.lbl_dir.show()
+            self.load_dir.show()
+        elif text == "Triangular (Peak Mid)":
+            self.lbl_load_id.setText("Element ID:")
+            self.lbl_val1.setText("Peak q (kN/m):")
+            self.lbl_val1_end.hide()
+            self.load_val1_end.hide()
             self.lbl_val2.hide()
             self.load_val2.hide()
+            self.lbl_val2_end.hide()
+            self.load_val2_end.hide()
+            
+            self.lbl_pos1.setText("Peak Pos (0-1):")
+            self.lbl_pos1.show()
+            self.load_pos1.show()
+            self.load_pos1.setText("0.5")
+
+            self.lbl_dir.show()
+            self.load_dir.show()
+        elif text == "Trapezoidal (Uniform Mid)":
+            self.lbl_load_id.setText("Element ID:")
+            self.lbl_val1.setText("Peak q (kN/m):")
+            self.lbl_val1_end.hide()
+            self.load_val1_end.hide()
+            self.lbl_val2.hide()
+            self.load_val2.hide()
+            self.lbl_val2_end.hide()
+            self.load_val2_end.hide()
+            
+            self.lbl_pos1.setText("Start Pos (0-1):")
+            self.lbl_pos1.show()
+            self.load_pos1.show()
+            self.load_pos1.setText("0.25")
+            self.lbl_pos2.setText("End Pos (0-1):")
+            self.lbl_pos2.show()
+            self.load_pos2.show()
+            self.load_pos2.setText("0.75")
+
             self.lbl_dir.show()
             self.load_dir.show()
 
@@ -1176,24 +1818,82 @@ class StructuralApp(QMainWindow):
         try:
             ltype = self.load_type.currentText()
             oid = int(self.load_id_input.text())
-            val1 = float(self.load_val1.text())
             
             if ltype == "Point Load":
+                val1 = float(self.load_val1.text())
                 val2 = float(self.load_val2.text())
                 self.ss.point_load(node_id=oid, Fx=val1, Fz=val2)
             elif ltype == "Moment":
+                val1 = float(self.load_val1.text())
                 self.ss.moment_load(node_id=oid, Ty=val1)
             elif ltype == "q-Load":
+                q_start = float(self.load_val1.text())
+                q_end = float(self.load_val1_end.text())
+                qp_start = float(self.load_val2.text() or 0)
+                qp_end = float(self.load_val2_end.text() or 0)
+
+                q_val = q_start if q_start == q_end else [q_start, q_end]
+                qp_val = qp_start if qp_start == qp_end else [qp_start, qp_end]
+
                 direction = self.load_dir.currentText()
-                self.ss.q_load(q=val1, element_id=oid, direction=direction)
-            
-            self.update_plot()
+                self.ss.q_load(q=q_val, element_id=oid, direction=direction, q_perp=qp_val)
+            elif ltype in ["Triangular (Peak Mid)", "Trapezoidal (Uniform Mid)"]:
+                peak = float(self.load_val1.text())
+                direction = self.load_dir.currentText()
+                model = self.frames[self.current_frame_name]
+                ss = model.system
+                el = ss.element_map.get(oid)
+                if not el:
+                    raise ValueError(f"Element {oid} not found.")
+                
+                self.sync_blueprint_from_system(ss, model)
+                n1 = ss.node_map[el.node_id1].vertex
+                n2 = ss.node_map[el.node_id2].vertex
+                ea, ei = el.EA, el.EI
+                
+                idx = oid - 1
+                if 0 <= idx < len(model.elements):
+                    model.elements.pop(idx)
+                    model.q_loads = [q for q in model.q_loads if q['element_idx'] != idx]
+                    for q in model.q_loads:
+                        if q['element_idx'] > idx: q['element_idx'] -= 1
+                
+                if ltype == "Triangular (Peak Mid)":
+                    pos = float(self.load_pos1.text())
+                    mid = [float(n1.x + (n2.x - n1.x) * pos), float(n1.y + (n2.y - n1.y) * pos)]
+                    if np.allclose([n1.x, n1.y], mid) or np.allclose(mid, [n2.x, n2.y]):
+                        raise ValueError("Element too short to split or peak at node.")
+                    model.elements.append({'loc': [[n1.x, n1.y], mid], 'EA': ea, 'EI': ei})
+                    model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [0, peak], 'dir': direction, 'qp': 0})
+                    model.elements.append({'loc': [mid, [n2.x, n2.y]], 'EA': ea, 'EI': ei})
+                    model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, 0], 'dir': direction, 'qp': 0})
+                else: # Trapezoidal
+                    pos1 = float(self.load_pos1.text())
+                    pos2 = float(self.load_pos2.text())
+                    if pos1 >= pos2:
+                        raise ValueError("Start position must be less than end position.")
+                    p1 = [float(n1.x + (n2.x - n1.x) * pos1), float(n1.y + (n2.y - n1.y) * pos1)]
+                    p2 = [float(n1.x + (n2.x - n1.x) * pos2), float(n1.y + (n2.y - n1.y) * pos2)]
+                    if np.allclose([n1.x, n1.y], p1) or np.allclose(p1, p2) or np.allclose(p2, [n2.x, n2.y]):
+                        raise ValueError("Element too short to split or positions overlap.")
+                    model.elements.append({'loc': [[n1.x, n1.y], p1], 'EA': ea, 'EI': ei})
+                    model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [0, peak], 'dir': direction, 'qp': 0})
+                    model.elements.append({'loc': [p1, p2], 'EA': ea, 'EI': ei})
+                    model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, peak], 'dir': direction, 'qp': 0})
+                    model.elements.append({'loc': [p2, [n2.x, n2.y]], 'EA': ea, 'EI': ei})
+                    model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, 0], 'dir': direction, 'qp': 0})
+                
+                self.rebuild_system()
+
+            self.sync_blueprint_from_system(self.ss, self.frames[self.current_frame_name])
+            self.rebuild_system()
+            self.element_mgr_widget.refresh_data()
         except Exception as e:
-            QMessageBox.warning(self, "Input Error", str(e))
+            msg = str(e) or f"An unknown error of type {type(e).__name__} occurred."
+            QMessageBox.warning(self, "Input Error", msg)
 
     def open_element_manager(self):
-        dlg = ElementManagerDialog(self)
-        dlg.exec()
+        self.sidebar_selector.setCurrentText("Element Manager")
 
     def solve_system(self):
         if not self.ss.element_map:
@@ -1204,6 +1904,120 @@ class StructuralApp(QMainWindow):
             self.update_plot()
         except Exception as e:
             QMessageBox.critical(self, "Solver Error", str(e))
+
+    def run_ui_test(self):
+        """Cycles through all major UI sections and modes to detect crashes/bugs."""
+        print("\n--- Starting UI Smoke Test ---")
+        errors = []
+        
+        # Save current state to restore after test
+        original_sidebar_idx = self.sidebar_selector.currentIndex()
+        original_view_mode = self.view_mode.currentIndex()
+        
+        try:
+            # 1. Cycle through Sidebar Sections
+            for i in range(self.sidebar_selector.count()):
+                section_name = self.sidebar_selector.itemText(i)
+                print(f"DEBUG: Testing section: {section_name}")
+                try:
+                    self.sidebar_selector.setCurrentIndex(i)
+                    QApplication.processEvents()
+                    
+                    # Sub-navigation testing for complex widgets
+                    if section_name == "Element Manager":
+                        for j in range(self.element_mgr_widget.sub_selector.count()):
+                            self.element_mgr_widget.sub_selector.setCurrentIndex(j)
+                            QApplication.processEvents()
+                            if self.element_mgr_widget.sub_selector.itemText(j) == "Loads":
+                                for k in range(self.element_mgr_widget.load_type_selector.count()):
+                                    self.element_mgr_widget.load_type_selector.setCurrentIndex(k)
+                                    QApplication.processEvents()
+                    
+                    elif section_name == "Geometry":
+                        for j in range(self.geom_selector.count()):
+                            self.geom_selector.setCurrentIndex(j)
+                            QApplication.processEvents()
+
+                    # 2. Cycle through View Modes for each section to test plotter stability
+                    for j in range(self.view_mode.count()):
+                        self.view_mode.setCurrentIndex(j)
+                        QApplication.processEvents()
+                except Exception as e:
+                    err_msg = f"Error in section '{section_name}': {type(e).__name__}: {e}"
+                    print(f"DEBUG ERROR: {err_msg}")
+                    print(traceback.format_exc())
+                    errors.append(err_msg)
+        finally:
+            self.sidebar_selector.setCurrentIndex(original_sidebar_idx)
+            self.view_mode.setCurrentIndex(original_view_mode)
+            
+        print("--- UI Smoke Test Finished ---\n")
+        if errors:
+            QMessageBox.warning(self, "UI Test Results", f"Encountered {len(errors)} errors. Check console for details.")
+        else:
+            QMessageBox.information(self, "UI Test Results", "No errors encountered during UI cycle.")
+
+    def export_results(self):
+        if not self.ss.element_map:
+            QMessageBox.warning(self, "Export Error", "No model defined.")
+            return
+
+        # Check if solved by looking for results on elements
+        is_solved = any(el.bending_moment is not None for el in self.ss.element_map.values())
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "JSON Files (*.json)")
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith('.json'):
+            file_path += '.json'
+
+        try:
+            # Helper to convert numpy types and non-serializable objects for JSON
+            def sanitize(obj):
+                if isinstance(obj, dict):
+                    return {str(k): sanitize(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple, set)):
+                    return [sanitize(i) for i in obj]
+                elif isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, (np.float64, np.float32)):
+                    return float(obj)
+                elif isinstance(obj, (np.int64, np.int32, np.uint32)):
+                    return int(obj)
+                elif type(obj).__name__ == 'Node':
+                    return {attr: sanitize(getattr(obj, attr)) 
+                            for attr in ['Fx', 'Fy', 'Tz', 'ux', 'uy', 'phi_z'] 
+                            if hasattr(obj, attr)}
+                return obj
+
+            state = self.get_ss_state(self.ss)
+            
+            data = {
+                "frame_name": self.current_frame_name,
+                "is_solved": is_solved,
+                "state": sanitize(state)
+            }
+
+            if is_solved:
+                results = {
+                    "nodes": {nid: {"ux": float(n.ux), "uy": float(n.uy), "phi_z": float(n.phi_z)} 
+                             for nid, n in self.ss.node_map.items()},
+                    "elements": {eid: {"axial_force": sanitize(el.axial_force),
+                                     "shear_force": sanitize(el.shear_force),
+                                     "bending_moment": sanitize(el.bending_moment)} 
+                                for eid, el in self.ss.element_map.items()},
+                    "reactions": sanitize(getattr(self.ss, 'reaction_forces', {}))
+                }
+                data["results"] = results
+
+            with open(file_path, 'w') as f:
+                json.dump(data, f, indent=4)
+
+            QMessageBox.information(self, "Success", f"Data exported to {file_path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export: {e}")
 
     def update_plot(self):
         # Clear the axes for the new plot
@@ -1220,11 +2034,16 @@ class StructuralApp(QMainWindow):
         mode = self.view_mode.currentText()
         factor = self.scale_slider.value()
 
+        # Update UI state
+        self.floor_selector.setEnabled(mode == "Grid Plan")
+        self.show_beam_marks.setEnabled(mode == "Grid Plan")
+
         def prepare_plotter():
             # Ensure anastruct uses our existing axes and figure
             self.ss.plotter.axes = [self.ax]
             self.ss.plotter.fig = self.figure
             self.ss.plotter.figure = self.figure
+            self.ax.set_aspect('equal', adjustable='box')
 
         try:
             if mode == "Structure":
@@ -1242,6 +2061,11 @@ class StructuralApp(QMainWindow):
                 self.ss.plotter.axial_force(
                     factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
                 )
+            elif mode == "Shear Force":
+                prepare_plotter()
+                self.ss.plotter.shear_force(
+                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
+                )
             elif mode == "Bending Moment":
                 prepare_plotter()
                 self.ss.plotter.bending_moment(
@@ -1250,6 +2074,7 @@ class StructuralApp(QMainWindow):
             elif mode == "Grid Plan":
                 # Custom drawing for Top View Grid
                 self.ax.set_axis_off()
+                alphabet = string.ascii_uppercase
                 
                 # 1. Parse spacings
                 try:
@@ -1262,19 +2087,47 @@ class StructuralApp(QMainWindow):
                 gy = [0.0] + list(np.cumsum(sy))
                 
                 # 2. Draw Grid Lines (Dotted)
-                for x in gx:
-                    self.ax.axvline(x, color='gray', linestyle=':', linewidth=1.0)
-                for y in gy:
-                    self.ax.axhline(y, color='gray', linestyle=':', linewidth=1.0)
+                if self.show_grid.isChecked():
+                    for x in gx:
+                        self.ax.axvline(x, color='gray', linestyle=':', linewidth=1.0)
+                    for y in gy:
+                        self.ax.axhline(y, color='gray', linestyle=':', linewidth=1.0)
                     
+                # 2.5 Draw Slabs
+                for name, data in self.slabs.items():
+                    pts = []
+                    for x_idx, y_idx in data['points']:
+                        if x_idx < len(gx) and y_idx < len(gy):
+                            pts.append([gx[x_idx], gy[y_idx]])
+                    if pts:
+                        poly = plt.Polygon(pts, closed=True, facecolor='orange', alpha=0.3, edgecolor='darkorange', linewidth=2)
+                        self.ax.add_patch(poly)
+                        cx, cy = np.mean([p[0] for p in pts]), np.mean([p[1] for p in pts])
+                        self.ax.text(cx, cy, name, ha='center', va='center', color='darkred', fontweight='bold', fontsize=10)
+
                 # 3. Labels
-                alphabet = string.ascii_uppercase
-                for i, x in enumerate(gx):
-                    self.ax.text(x, gy[0] - 0.5, str(i+1), ha='center', va='top', color='white', fontweight='bold')
-                for i, y in enumerate(gy):
-                    label = alphabet[i] if i < len(alphabet) else f"Z{i}"
-                    self.ax.text(gx[0] - 0.5, y, label, ha='right', va='center', color='white', fontweight='bold')
+                if self.show_grid_labels.isChecked():
+                    for i, x in enumerate(gx):
+                        self.ax.text(x, gy[0] - 0.5, str(i+1), ha='center', va='top', color='black', fontweight='bold')
+                    for i, y in enumerate(gy):
+                        label = alphabet[i] if i < len(alphabet) else f"Z{i}"
+                        self.ax.text(gx[0] - 0.5, y, label, ha='right', va='center', color='black', fontweight='bold')
                     
+                # Extract selected height and next height
+                try:
+                    current_idx = self.floor_selector.currentIndex()
+                    sel_text = self.floor_selector.currentText()
+                    sel_height = float(sel_text.split('(')[1].split('m')[0])
+                    
+                    if current_idx < self.floor_selector.count() - 1:
+                        next_text = self.floor_selector.itemText(current_idx + 1)
+                        next_height = float(next_text.split('(')[1].split('m')[0])
+                    else:
+                        next_height = None
+                except (IndexError, ValueError):
+                    sel_height = 0.0
+                    next_height = None
+
                 # 4. Draw Frames
                 for row in range(self.grid_table.rowCount()):
                     line_item = self.grid_table.item(row, 0)
@@ -1288,28 +2141,85 @@ class StructuralApp(QMainWindow):
                     except ValueError: offset = 0.0
                     
                     if frame_name not in self.frames: continue
-                    f_ss = self.frames[frame_name]
+                    f_model = self.frames[frame_name]
+                    f_ss = f_model.system
                     if not f_ss.element_map: continue
                     
-                    nodes_x = [n.vertex.x for n in f_ss.node_map.values()]
-                    min_fx, max_fx = min(nodes_x), max(nodes_x)
-                    min_fy = min(n.vertex.y for n in f_ss.node_map.values())
-                    base_nodes_x = [n.vertex.x for n in f_ss.node_map.values() if np.isclose(n.vertex.y, min_fy)]
+                    # Filter by height: show only frames that reach this height
+                    max_frame_y = max(n.vertex.y for n in f_ss.node_map.values())
+                    if max_frame_y < sel_height:
+                        continue
+                    
+                    # Find beams at this height for marking
+                    beams_at_h = []
+                    for eid, el in f_ss.element_map.items():
+                        n1 = f_ss.node_map[el.node_id1].vertex
+                        n2 = f_ss.node_map[el.node_id2].vertex
+                        if np.isclose(n1.y, sel_height) and np.isclose(n2.y, sel_height):
+                            beams_at_h.append(el)
+
+                    # Find columns starting at this height and going to next_height
+                    columns_at_h = []
+                    if next_height is not None:
+                        for eid, el in f_ss.element_map.items():
+                            n1 = f_ss.node_map[el.node_id1].vertex
+                            n2 = f_ss.node_map[el.node_id2].vertex
+                            h_coords = sorted([n1.y, n2.y])
+                            if np.isclose(h_coords[0], sel_height) and np.isclose(h_coords[1], next_height):
+                                if np.isclose(n1.x, n2.x):
+                                    columns_at_h.append(el)
                     
                     if line_label.isdigit(): # Vertical line (1, 2, 3...)
                         idx = int(line_label) - 1
                         if idx < len(gx):
                             pos_x = gx[idx]
-                            self.ax.plot([pos_x, pos_x], [gy[0] + offset + min_fx, gy[0] + offset + max_fx], color='cyan', linewidth=2)
-                            for bx in base_nodes_x: self.ax.plot(pos_x, gy[0] + offset + bx, 's', color='red', markersize=6)
+                            
+                            # Plot beams
+                            for el in beams_at_h:
+                                n1 = f_ss.node_map[el.node_id1].vertex
+                                n2 = f_ss.node_map[el.node_id2].vertex
+                                self.ax.plot([pos_x, pos_x], [gy[0] + offset + n1.x, gy[0] + offset + n2.x], color='cyan', linewidth=3)
+                                
+                                if self.show_beam_marks.isChecked():
+                                    mid_x = (n1.x + n2.x) / 2.0
+                                    self.ax.text(pos_x + 0.2, gy[0] + offset + mid_x, f"B:{frame_name}-{el.id}", 
+                                                 color='blue', fontsize=8, fontweight='bold', va='center')
+                            
+                            # Plot columns and marks
+                            if self.show_beam_marks.isChecked():
+                                for el in columns_at_h:
+                                    n1 = f_ss.node_map[el.node_id1].vertex
+                                    pos_y = gy[0] + offset + n1.x
+                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
+                                    self.ax.text(pos_x - 0.2, pos_y, f"C:{frame_name}-{el.id}", 
+                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='right', va='center')
+
                     else: # Horizontal line (A, B, C...)
                         idx = alphabet.find(line_label)
                         if idx != -1 and idx < len(gy):
                             pos_y = gy[idx]
-                            self.ax.plot([gx[0] + offset + min_fx, gx[0] + offset + max_fx], [pos_y, pos_y], color='cyan', linewidth=2)
-                            for bx in base_nodes_x: self.ax.plot(gx[0] + offset + bx, pos_y, 's', color='red', markersize=6)
 
-                self.ax.set_aspect('equal', adjustable='datalim')
+                            # Plot beams
+                            for el in beams_at_h:
+                                n1 = f_ss.node_map[el.node_id1].vertex
+                                n2 = f_ss.node_map[el.node_id2].vertex
+                                self.ax.plot([gx[0] + offset + n1.x, gx[0] + offset + n2.x], [pos_y, pos_y], color='cyan', linewidth=3)
+                                
+                                if self.show_beam_marks.isChecked():
+                                    mid_x = (n1.x + n2.x) / 2.0
+                                    self.ax.text(gx[0] + offset + mid_x, pos_y + 0.2, f"B:{frame_name}-{el.id}", 
+                                                 color='blue', fontsize=8, fontweight='bold', ha='center')
+
+                            # Plot columns and marks
+                            if self.show_beam_marks.isChecked():
+                                for el in columns_at_h:
+                                    n1 = f_ss.node_map[el.node_id1].vertex
+                                    pos_x = gx[0] + offset + n1.x
+                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
+                                    self.ax.text(pos_x, pos_y - 0.2, f"C:{frame_name}-{el.id}", 
+                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='center', va='top')
+
+                self.ax.set_aspect('equal', adjustable='box')
                 self.ax.autoscale_view()
 
         except Exception as e:
@@ -1328,18 +2238,20 @@ class StructuralApp(QMainWindow):
                     pass
         
         # Apply grid and tick settings
-        # Control axis visibility (ticks, labels, spines)
-        self.ax.set_axis_on() if self.show_ticks.isChecked() else self.ax.set_axis_off()
+        if mode != "Grid Plan":
+            # Control axis visibility (ticks, labels, spines)
+            self.ax.set_axis_on() if self.show_ticks.isChecked() else self.ax.set_axis_off()
 
-        # Control grid visibility independently
-        self.ax.grid(self.show_grid.isChecked())
+            # Control grid visibility independently
+            self.ax.grid(self.show_grid.isChecked())
+
+        # Ensure aspect ratio is handled correctly to avoid console warnings
+        self.ax.set_aspect('equal', adjustable='box')
 
         # Restore view state
         if self.view_xlim:
             self.ax.set_xlim(self.view_xlim)
             self.ax.set_ylim(self.view_ylim)
-        else:
-            self.ax.set_aspect('equal', adjustable='box')
 
         # Refresh the canvas
         self.canvas.draw()
