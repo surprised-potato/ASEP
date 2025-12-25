@@ -17,3 +17,12 @@ class FrameModel:
         self.moment_loads.clear()
         self.q_loads.clear()
         self.system = SystemElements()
+
+class BuildingModel:
+    """Stores the global configuration of the building: grid, levels, and frame assignments."""
+    def __init__(self):
+        self.grid_x = []  # List of floats (spacings)
+        self.grid_y = []  # List of floats (spacings)
+        self.levels = []  # List of dicts: {'name': str, 'elevation': float}
+        self.assignments = [] # List of dicts: {'line': str, 'frame': str, 'offset': float}
+        self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float}}

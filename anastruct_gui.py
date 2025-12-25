@@ -27,7 +27,7 @@ from PyQt6.QtCore import Qt
 
 from anastruct import SystemElements
 
-from models import FrameModel
+from models import FrameModel, BuildingModel
 from widgets import ElementManagerWidget
 from plotter import StructuralPlotter
 
@@ -40,6 +40,7 @@ class StructuralApp(QMainWindow):
         # Frame Management
         self.frames = {"Frame 1": FrameModel()}
         self.current_frame_name = "Frame 1"
+        self.building = BuildingModel()
         self.ss = self.frames[self.current_frame_name].system
         self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float}}
         
@@ -59,7 +60,7 @@ class StructuralApp(QMainWindow):
         
         # Dropdown for section selection
         self.sidebar_selector = QComboBox()
-        self.sidebar_selector.addItems(["Grid", "Frames", "Slabs", "Geometry", "Loads & Supports", "Analysis", "Element Manager"])
+        self.sidebar_selector.addItems(["Grid", "Frames", "Slabs", "Geometry", "Loads & Supports", "Analysis", "Element Manager", "Test"])
         sidebar_layout.addWidget(QLabel("Select Section:"))
         sidebar_layout.addWidget(self.sidebar_selector)
 
@@ -409,13 +410,17 @@ class StructuralApp(QMainWindow):
         solve_btn.clicked.connect(self.solve_system)
         analysis_layout.addWidget(solve_btn)
 
+        export_btn = QPushButton("Export Project (JSON)")
+        export_btn.clicked.connect(self.export_project)
+        analysis_layout.addWidget(export_btn)
+
+        import_btn = QPushButton("Import Project (JSON)")
+        import_btn.clicked.connect(self.import_project)
+        analysis_layout.addWidget(import_btn)
+
         test_ui_btn = QPushButton("Run UI Smoke Test")
         test_ui_btn.clicked.connect(self.run_ui_test)
         analysis_layout.addWidget(test_ui_btn)
-
-        export_btn = QPushButton("Export Analysis Results")
-        export_btn.clicked.connect(self.export_results)
-        analysis_layout.addWidget(export_btn)
 
         # Element Manager
         mgr_btn = QPushButton("Element Manager")
@@ -432,6 +437,15 @@ class StructuralApp(QMainWindow):
         # --- SECTION 5: ELEMENT MANAGER ---
         self.element_mgr_widget = ElementManagerWidget(self)
         self.sidebar_stack.addWidget(self.element_mgr_widget)
+
+        # --- SECTION 6: TEST ---
+        test_tab = QWidget()
+        test_layout = QVBoxLayout(test_tab)
+        gen_building_btn = QPushButton("Generate 3-Story Building (3x4 Grid)")
+        gen_building_btn.clicked.connect(self.generate_test_building)
+        test_layout.addWidget(gen_building_btn)
+        test_layout.addStretch()
+        self.sidebar_stack.addWidget(test_tab)
 
         sidebar_scroll.setWidget(sidebar_widget)
         layout.addWidget(sidebar_scroll)
@@ -460,7 +474,7 @@ class StructuralApp(QMainWindow):
         viz_toolbar = QHBoxLayout()
         
         self.view_mode = QComboBox()
-        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan"])
+        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan", "3D Wireframe"])
         self.view_mode.currentTextChanged.connect(self.plotter.update_plot)
         
         self.floor_selector = QComboBox()
@@ -488,6 +502,10 @@ class StructuralApp(QMainWindow):
         self.show_beam_marks = QCheckBox("Beam Marks")
         self.show_beam_marks.stateChanged.connect(self.plotter.update_plot)
 
+        self.lock_3d_rotation = QCheckBox("Lock 3D Rotation")
+        self.lock_3d_rotation.setEnabled(False)
+        self.lock_3d_rotation.stateChanged.connect(self.plotter.update_plot)
+
         reset_view_btn = QPushButton("Fit View")
         reset_view_btn.clicked.connect(self.plotter.reset_view)
 
@@ -501,6 +519,7 @@ class StructuralApp(QMainWindow):
         viz_toolbar.addWidget(self.show_ticks)
         viz_toolbar.addWidget(self.show_grid_labels)
         viz_toolbar.addWidget(self.show_beam_marks)
+        viz_toolbar.addWidget(self.lock_3d_rotation)
         viz_toolbar.addWidget(reset_view_btn)
         viz_toolbar.addStretch()
         
@@ -524,7 +543,7 @@ class StructuralApp(QMainWindow):
 
     def on_sidebar_changed(self, text):
         # Hide active frame selector for Frames and Grid sections
-        show_active_frame = text not in ["Frames", "Grid", "Slabs"]
+        show_active_frame = text not in ["Frames", "Grid", "Slabs", "Test"]
         self.active_frame_label.setVisible(show_active_frame)
         self.global_frame_selector.setVisible(show_active_frame)
 
@@ -705,7 +724,7 @@ class StructuralApp(QMainWindow):
                 for line, start, end, is_vert in edges:
                     if line not in grid_mapping: continue
                     fname, offset = grid_mapping[line]
-                    f_ss = self.frames[fname]
+                    f_ss = self.frames[fname].system
                     
                     f_start = start - (gx[0] if not is_vert else gy[0]) - offset
                     f_end = end - (gx[0] if not is_vert else gy[0]) - offset
@@ -1513,67 +1532,188 @@ class StructuralApp(QMainWindow):
         else:
             QMessageBox.information(self, "UI Test Results", "No errors encountered during UI cycle.")
 
-    def export_results(self):
-        if not self.ss.element_map:
-            QMessageBox.warning(self, "Export Error", "No model defined.")
-            return
+    def export_project(self):
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Project", "", "JSON Files (*.json)")
+        if not file_path: return
+        if not file_path.lower().endswith('.json'): file_path += '.json'
 
-        # Check if solved by looking for results on elements
-        is_solved = any(el.bending_moment is not None for el in self.ss.element_map.values())
-
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "JSON Files (*.json)")
-        if not file_path:
-            return
-
-        if not file_path.lower().endswith('.json'):
-            file_path += '.json'
+        # Sync all frames first
+        for name, model in self.frames.items():
+            self.sync_blueprint_from_system(model.system, model)
 
         try:
-            # Helper to convert numpy types and non-serializable objects for JSON
-            def sanitize(obj):
-                if isinstance(obj, dict):
-                    return {str(k): sanitize(v) for k, v in obj.items()}
-                elif isinstance(obj, (list, tuple, set)):
-                    return [sanitize(i) for i in obj]
-                elif isinstance(obj, np.ndarray):
-                    return obj.tolist()
-                elif isinstance(obj, (np.float64, np.float32)):
-                    return float(obj)
-                elif isinstance(obj, (np.int64, np.int32, np.uint32)):
-                    return int(obj)
-                elif type(obj).__name__ == 'Node':
-                    return {attr: sanitize(getattr(obj, attr)) 
-                            for attr in ['Fx', 'Fy', 'Tz', 'ux', 'uy', 'phi_z'] 
-                            if hasattr(obj, attr)}
-                return obj
-
-            state = self.get_ss_state(self.ss)
-            
             data = {
-                "frame_name": self.current_frame_name,
-                "is_solved": is_solved,
-                "state": sanitize(state)
+                "grid": {
+                    "x": self.grid_x_input.text(),
+                    "y": self.grid_y_input.text(),
+                    "z": [[self.grid_z_table.item(r, 0).text(), self.grid_z_table.item(r, 1).text()] 
+                          for r in range(self.grid_z_table.rowCount())],
+                    "assignments": [[self.grid_table.item(r, 0).text(), 
+                                     self.grid_table.cellWidget(r, 1).currentText(),
+                                     self.grid_table.item(r, 2).text()]
+                                    for r in range(self.grid_table.rowCount())]
+                },
+                "frames": {name: {
+                    "elements": m.elements,
+                    "supports": m.supports,
+                    "point_loads": m.point_loads,
+                    "moment_loads": m.moment_loads,
+                    "q_loads": m.q_loads
+                } for name, m in self.frames.items()},
+                "slabs": [[self.slabs_table.item(r, 0).text(),
+                           self.slabs_table.item(r, 1).text(),
+                           self.slabs_table.item(r, 2).text()]
+                          for r in range(self.slabs_table.rowCount())],
+                "current_frame": self.current_frame_name
             }
-
-            if is_solved:
-                results = {
-                    "nodes": {nid: {"ux": float(n.ux), "uy": float(n.uy), "phi_z": float(n.phi_z)} 
-                             for nid, n in self.ss.node_map.items()},
-                    "elements": {eid: {"axial_force": sanitize(el.axial_force),
-                                     "shear_force": sanitize(el.shear_force),
-                                     "bending_moment": sanitize(el.bending_moment)} 
-                                for eid, el in self.ss.element_map.items()},
-                    "reactions": sanitize(getattr(self.ss, 'reaction_forces', {}))
-                }
-                data["results"] = results
 
             with open(file_path, 'w') as f:
                 json.dump(data, f, indent=4)
-
-            QMessageBox.information(self, "Success", f"Data exported to {file_path}")
-
+            QMessageBox.information(self, "Success", "Project exported.")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export: {e}")
+
+    def import_project(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Import Project", "", "JSON Files (*.json)")
+        if not file_path: return
+
+        try:
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            
+            # 1. Restore Grid
+            self.grid_x_input.setText(data['grid']['x'])
+            self.grid_y_input.setText(data['grid']['y'])
+            
+            self.grid_z_table.setRowCount(0)
+            for name, elev in data['grid']['z']:
+                row = self.grid_z_table.rowCount()
+                self.grid_z_table.insertRow(row)
+                self.grid_z_table.setItem(row, 0, QTableWidgetItem(name))
+                self.grid_z_table.setItem(row, 1, QTableWidgetItem(elev))
+            
+            # 2. Restore Frames
+            self.frames = {}
+            self.frame_list.clear()
+            self.global_frame_selector.clear()
+            for name, f_data in data['frames'].items():
+                model = FrameModel()
+                model.elements = f_data['elements']
+                model.supports = f_data['supports']
+                model.point_loads = f_data['point_loads']
+                model.moment_loads = f_data['moment_loads']
+                model.q_loads = f_data['q_loads']
+                self.frames[name] = model
+                self.frame_list.addItem(name)
+                self.global_frame_selector.addItem(name)
+            
+            # 3. Restore Grid Assignments
+            self.grid_table.setRowCount(0)
+            for line, frame, offset in data['grid']['assignments']:
+                row = self.grid_table.rowCount()
+                self.grid_table.insertRow(row)
+                self.grid_table.setItem(row, 0, QTableWidgetItem(line))
+                combo = QComboBox()
+                combo.addItems(list(self.frames.keys()))
+                combo.setCurrentText(frame)
+                combo.currentTextChanged.connect(self.plotter.update_plot)
+                self.grid_table.setCellWidget(row, 1, combo)
+                self.grid_table.setItem(row, 2, QTableWidgetItem(offset))
+
+            # 4. Restore Slabs
+            self.slabs_table.setRowCount(0)
+            for name, pts, load in data['slabs']:
+                row = self.slabs_table.rowCount()
+                self.slabs_table.insertRow(row)
+                self.slabs_table.setItem(row, 0, QTableWidgetItem(name))
+                self.slabs_table.setItem(row, 1, QTableWidgetItem(pts))
+                self.slabs_table.setItem(row, 2, QTableWidgetItem(load))
+            
+            self.current_frame_name = data.get('current_frame', list(self.frames.keys())[0])
+            items = self.frame_list.findItems(self.current_frame_name, Qt.MatchFlag.MatchExactly)
+            if items: self.frame_list.setCurrentItem(items[0])
+            
+            self.on_slab_data_changed()
+            self.update_floor_levels()
+            self.rebuild_system()
+            QMessageBox.information(self, "Success", "Project imported.")
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import: {e}")
+
+    def generate_test_building(self):
+        # 1. Setup Grid
+        self.grid_x_input.setText("6, 6") # 2 bays (3 lines: 1, 2, 3)
+        self.grid_y_input.setText("5, 5, 5") # 3 bays (4 lines: A, B, C, D)
+        
+        self.grid_z_table.setRowCount(0)
+        levels = [("Foundation", "-2.0"), ("Ground Floor", "0.0"), ("Floor 2", "3.5"), ("Floor 3", "7.0")]
+        for name, elev in levels:
+            row = self.grid_z_table.rowCount()
+            self.grid_z_table.insertRow(row)
+            self.grid_z_table.setItem(row, 0, QTableWidgetItem(name))
+            self.grid_z_table.setItem(row, 1, QTableWidgetItem(elev))
+        
+        # 2. Create Frames
+        self.frames = {}
+        self.frame_list.clear()
+        self.global_frame_selector.clear()
+        
+        # Frame A: Used for lines 1-3 (running along Y, so 3 bays of 5m)
+        self.frames["Frame 3-Bay"] = FrameModel()
+        self.current_frame_name = "Frame 3-Bay"
+        self.frame_bay_w.setText("5")
+        self.frame_n_bays.setText("3")
+        self.frame_n_floors.setText("3")
+        self.build_frame_grid()
+        
+        # Frame B: Used for lines A-D (running along X, so 2 bays of 6m)
+        self.frames["Frame 2-Bay"] = FrameModel()
+        self.current_frame_name = "Frame 2-Bay"
+        self.frame_bay_w.setText("6")
+        self.frame_n_bays.setText("2")
+        self.frame_n_floors.setText("3")
+        self.build_frame_grid()
+        
+        # Refresh UI lists
+        for name in self.frames:
+            self.frame_list.addItem(name)
+            self.global_frame_selector.addItem(name)
+        
+        # 3. Assign Frames
+        self.grid_table.setRowCount(0)
+        # Vertical lines 1, 2, 3
+        for i in range(1, 4):
+            self.add_grid_assignment()
+            row = self.grid_table.rowCount() - 1
+            self.grid_table.setItem(row, 0, QTableWidgetItem(str(i)))
+            self.grid_table.cellWidget(row, 1).setCurrentText("Frame 3-Bay")
+            
+        # Horizontal lines A, B, C, D
+        for char in "ABCD":
+            self.add_grid_assignment()
+            row = self.grid_table.rowCount() - 1
+            self.grid_table.setItem(row, 0, QTableWidgetItem(char))
+            self.grid_table.cellWidget(row, 1).setCurrentText("Frame 2-Bay")
+
+        # 4. Add Slabs
+        self.slabs_table.setRowCount(0)
+        for floor in ["Ground", "Floor 2", "Floor 3"]:
+            row = self.slabs_table.rowCount()
+            self.slabs_table.insertRow(row)
+            self.slabs_table.setItem(row, 0, QTableWidgetItem(f"{floor} Slab"))
+            self.slabs_table.setItem(row, 1, QTableWidgetItem("A1, A3, D3, D1"))
+            self.slabs_table.setItem(row, 2, QTableWidgetItem("5.0"))
+        
+        self.on_slab_data_changed()
+        self.update_floor_levels()
+        
+        # Distribute loads for each floor
+        for i in range(self.floor_selector.count()):
+            self.floor_selector.setCurrentIndex(i)
+            self.distribute_slab_loads()
+            
+        self.sidebar_selector.setCurrentText("Grid")
+        QMessageBox.information(self, "Test Generated", "3-Story building defined. Switch to 'Grid Plan' or '3D Wireframe' to view.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

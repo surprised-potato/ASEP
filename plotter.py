@@ -1,6 +1,7 @@
 import string
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 class StructuralPlotter:
     def __init__(self, main_window):
@@ -20,7 +21,22 @@ class StructuralPlotter:
         self.canvas.mpl_connect('button_release_event', self.on_release)
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
+    def _ensure_axes(self, projection='2d'):
+        """Ensures the axes has the correct projection, recreating if necessary."""
+        target = '3d' if projection == '3d' else 'rectilinear'
+        if self.ax.name != target:
+            self.figure.clear()
+            if projection == '3d':
+                self.ax = self.figure.add_subplot(111, projection='3d')
+            else:
+                self.ax = self.figure.add_subplot(111)
+            # Update references
+            self.main.ax = self.ax
+
     def update_plot(self):
+        mode = self.main.view_mode.currentText()
+        self._ensure_axes('3d' if mode == "3D Wireframe" else '2d')
+
         # Clear the axes for the new plot
         self.ax.clear()
         
@@ -32,12 +48,12 @@ class StructuralPlotter:
         # Get current figure size to maintain aspect ratio logic in anastruct
         current_figsize = self.figure.get_size_inches()
 
-        mode = self.main.view_mode.currentText()
         factor = self.main.scale_slider.value()
 
         # Update UI state
         self.main.floor_selector.setEnabled(mode == "Grid Plan")
         self.main.show_beam_marks.setEnabled(mode == "Grid Plan")
+        self.main.lock_3d_rotation.setEnabled(mode == "3D Wireframe")
 
         def prepare_plotter():
             # Ensure anastruct uses our existing axes and figure
@@ -75,6 +91,7 @@ class StructuralPlotter:
             elif mode == "Grid Plan":
                 # Custom drawing for Top View Grid
                 self.ax.set_axis_off()
+                self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
                 alphabet = string.ascii_uppercase
                 
                 # 1. Parse spacings
@@ -223,11 +240,110 @@ class StructuralPlotter:
                 self.ax.set_aspect('equal', adjustable='box')
                 self.ax.autoscale_view()
 
+            elif mode == "3D Wireframe":
+                self.ax.set_axis_on()
+                self.figure.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+                alphabet = string.ascii_uppercase
+                
+                # 0. Configure Mouse Interaction
+                if hasattr(self.ax, '_rotate_btn'):
+                    if self.main.lock_3d_rotation.isChecked():
+                        self.ax._rotate_btn = None
+                        if hasattr(self.ax, '_pan_btn'):
+                            self.ax._pan_btn = 1 # Left click to pan
+                    else:
+                        self.ax._rotate_btn = 1 # Left click to rotate
+                        if hasattr(self.ax, '_pan_btn'):
+                            self.ax._pan_btn = 3 # Right click to pan
+
+                # 1. Parse spacings
+                try:
+                    sx = [float(s.strip()) for s in self.main.grid_x_input.text().split(',') if s.strip()]
+                    sy = [float(s.strip()) for s in self.main.grid_y_input.text().split(',') if s.strip()]
+                except ValueError:
+                    sx, sy = [], []
+                gx = [0.0] + list(np.cumsum(sx))
+                gy = [0.0] + list(np.cumsum(sy))
+
+                # Parse Z elevations
+                gz = []
+                z_labels = []
+                for row in range(self.main.grid_z_table.rowCount()):
+                    try:
+                        name_item = self.main.grid_z_table.item(row, 0)
+                        elev_item = self.main.grid_z_table.item(row, 1)
+                        if name_item and elev_item:
+                            gz.append(float(elev_item.text()))
+                            z_labels.append(name_item.text())
+                    except (ValueError, AttributeError): continue
+
+                # 2. Draw Frames
+                for row in range(self.main.grid_table.rowCount()):
+                    line_item = self.main.grid_table.item(row, 0)
+                    offset_item = self.main.grid_table.item(row, 2)
+                    if not line_item or not offset_item: continue
+                    
+                    line_label = line_item.text().upper()
+                    frame_name = self.main.grid_table.cellWidget(row, 1).currentText()
+                    try: offset = float(offset_item.text())
+                    except ValueError: offset = 0.0
+                    
+                    if frame_name not in self.main.frames: continue
+                    f_ss = self.main.frames[frame_name].system
+                    if not f_ss.element_map: continue
+                    
+                    for el in f_ss.element_map.values():
+                        n1 = f_ss.node_map[el.node_id1].vertex
+                        n2 = f_ss.node_map[el.node_id2].vertex
+                        
+                        if line_label.isdigit(): # Vertical line
+                            idx = int(line_label) - 1
+                            if idx < len(gx):
+                                pos_x = gx[idx]
+                                self.ax.plot([pos_x, pos_x], 
+                                             [gy[0] + offset + n1.x, gy[0] + offset + n2.x], 
+                                             [n1.y, n2.y], color='steelblue', linewidth=1.5)
+                        else: # Horizontal line
+                            idx = alphabet.find(line_label)
+                            if idx != -1 and idx < len(gy):
+                                pos_y = gy[idx]
+                                self.ax.plot([gx[0] + offset + n1.x, gx[0] + offset + n2.x], 
+                                             [pos_y, pos_y], 
+                                             [n1.y, n2.y], color='steelblue', linewidth=1.5)
+
+                # 3. Ticks and Labels
+                if self.main.show_ticks.isChecked():
+                    self.ax.set_xticks(gx)
+                    self.ax.set_yticks(gy)
+                    self.ax.set_zticks(gz)
+                    
+                    if self.main.show_grid_labels.isChecked():
+                        self.ax.set_xticklabels([str(i+1) for i in range(len(gx))])
+                        y_labels = [alphabet[i] if i < 26 else f"Z{i}" for i in range(len(gy))]
+                        self.ax.set_yticklabels(y_labels)
+                        self.ax.set_zticklabels(z_labels)
+                    else:
+                        self.ax.set_xticklabels([])
+                        self.ax.set_yticklabels([])
+                        self.ax.set_zticklabels([])
+                else:
+                    self.ax.set_xticks([])
+                    self.ax.set_yticks([])
+                    self.ax.set_zticks([])
+
+                self.ax.set_xlabel('X (m)' if self.main.show_grid_labels.isChecked() else '')
+                self.ax.set_ylabel('Y (m)' if self.main.show_grid_labels.isChecked() else '')
+                self.ax.set_zlabel('Elevation (m)' if self.main.show_grid_labels.isChecked() else '')
+                
+                self.ax.grid(self.main.show_grid.isChecked())
+                if not self.view_xlim: # Only set initial view if not already set
+                    self.ax.view_init(elev=20, azim=-35)
+
         except Exception as e:
             print(f"Plotting error: {type(e).__name__}: {e}")
             # Fallback to structure view and update UI if results aren't available
             if mode != "Structure":
-                self.main.view_mode.blockSignals(True)
+                self.main.view_mode.blockSignals(True) 
                 self.main.view_mode.setCurrentText("Structure")
                 self.main.view_mode.blockSignals(False)
                 try:
@@ -239,18 +355,19 @@ class StructuralPlotter:
                     pass
         
         # Apply grid and tick settings
-        if mode != "Grid Plan":
+        if mode not in ["Grid Plan", "3D Wireframe"]:
             # Control axis visibility (ticks, labels, spines)
             self.ax.set_axis_on() if self.main.show_ticks.isChecked() else self.ax.set_axis_off()
-
             # Control grid visibility independently
             self.ax.grid(self.main.show_grid.isChecked())
+            self.figure.subplots_adjust(left=0.07, right=0.97, top=0.95, bottom=0.07)
 
         # Ensure aspect ratio is handled correctly to avoid console warnings
-        self.ax.set_aspect('equal', adjustable='box')
+        if self.ax.name != '3d':
+            self.ax.set_aspect('equal', adjustable='box')
 
         # Restore view state
-        if self.view_xlim:
+        if self.view_xlim and self.ax.name != '3d':
             self.ax.set_xlim(self.view_xlim)
             self.ax.set_ylim(self.view_ylim)
 
@@ -259,6 +376,21 @@ class StructuralPlotter:
 
     def on_scroll(self, event):
         if event.inaxes != self.ax: return
+        if self.ax.name == '3d':
+            # 3D Zoom logic
+            scale_factor = 0.9 if event.button == 'up' else 1.1
+            cur_xlim = self.ax.get_xlim()
+            cur_ylim = self.ax.get_ylim()
+            cur_zlim = self.ax.get_zlim()
+            def scale_lim(lim, factor):
+                mid = (lim[0] + lim[1]) / 2
+                half_range = (lim[1] - lim[0]) / 2 * factor
+                return [mid - half_range, mid + half_range]
+            self.ax.set_xlim(scale_lim(cur_xlim, scale_factor))
+            self.ax.set_ylim(scale_lim(cur_ylim, scale_factor))
+            self.ax.set_zlim(scale_lim(cur_zlim, scale_factor))
+            self.canvas.draw_idle()
+            return
         self.ax.set_aspect('equal', adjustable='box')
         base_scale = 1.2
         scale_factor = 1 / base_scale if event.button == 'up' else base_scale
@@ -271,14 +403,14 @@ class StructuralPlotter:
         self.canvas.draw_idle()
 
     def on_press(self, event):
-        if event.button == 2: 
+        if event.button == 2 and self.ax.name != '3d': 
             self.ax.set_aspect('equal', adjustable='box')
             self.press = event.x, event.y, self.ax.get_xlim(), self.ax.get_ylim()
 
     def on_release(self, event): self.press = None
 
     def on_motion(self, event):
-        if self.press is None or event.inaxes != self.ax or event.x is None or event.y is None: return
+        if self.press is None or event.inaxes != self.ax or event.x is None or event.y is None or self.ax.name == '3d': return
         start_x, start_y, x_lim, y_lim = self.press
         
         dx_pix = event.x - start_x
