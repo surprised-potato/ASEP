@@ -27,403 +27,9 @@ from PyQt6.QtCore import Qt
 
 from anastruct import SystemElements
 
-class FrameModel:
-    """Stores the blueprint of the structural model, insulated from anastruct's internal state."""
-    def __init__(self):
-        self.elements = []      # [{'loc': [[x1,y1],[x2,y2]], 'EA':..., 'EI':...}]
-        self.supports = []      # [{'loc': [x,y], 'type': str, 'args': dict}]
-        self.point_loads = []   # [{'loc': [x,y], 'Fx': float, 'Fz': float}]
-        self.moment_loads = []  # [{'loc': [x,y], 'Ty': float}]
-        self.q_loads = []       # [{'element_idx': int, 'q': val, 'dir': str, 'qp': val}]
-        self.system = SystemElements()
-
-    def clear(self):
-        self.elements.clear()
-        self.supports.clear()
-        self.point_loads.clear()
-        self.moment_loads.clear()
-        self.q_loads.clear()
-        self.system = SystemElements()
-
-class ElementManagerWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent_app = parent
-        self.ss = parent.ss
-        self.layout = QVBoxLayout(self)
-
-        # Dropdown for sub-section selection
-        self.sub_selector = QComboBox()
-        self.sub_selector.addItems(["Elements", "Nodes", "Supports", "Loads"])
-        self.layout.addWidget(QLabel("Manage Section:"))
-        self.layout.addWidget(self.sub_selector)
-        
-        self.sub_stack = QStackedWidget()
-        self.layout.addWidget(self.sub_stack)
-        self.sub_selector.currentIndexChanged.connect(self.sub_stack.setCurrentIndex)
-        
-        # Elements Tab
-        self.elements_tab = QWidget()
-        self.elements_layout = QVBoxLayout(self.elements_tab)
-        self.elements_table = QTableWidget()
-        self.elements_table.setColumnCount(5)
-        self.elements_table.setHorizontalHeaderLabels(["ID", "Node 1", "Node 2", "EA", "EI"])
-        self.elements_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.elements_layout.addWidget(self.elements_table)
-        self.del_el_btn = QPushButton("Delete Selected Elements")
-        self.del_el_btn.clicked.connect(self.delete_elements)
-        self.elements_layout.addWidget(self.del_el_btn)
-        self.sub_stack.addWidget(self.elements_tab)
-        
-        # Nodes Tab
-        self.nodes_tab = QWidget()
-        self.nodes_layout = QVBoxLayout(self.nodes_tab)
-        self.nodes_table = QTableWidget()
-        self.nodes_table.setColumnCount(3)
-        self.nodes_table.setHorizontalHeaderLabels(["ID", "X", "Y"])
-        self.nodes_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.nodes_layout.addWidget(self.nodes_table)
-        self.sub_stack.addWidget(self.nodes_tab)
-        
-        # Supports Tab
-        self.supports_tab = QWidget()
-        self.supports_layout = QVBoxLayout(self.supports_tab)
-        self.supports_table = QTableWidget()
-        self.supports_table.setColumnCount(2)
-        self.supports_table.setHorizontalHeaderLabels(["Node ID", "Type"])
-        self.supports_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.supports_layout.addWidget(self.supports_table)
-        self.del_sup_btn = QPushButton("Delete Selected Supports")
-        self.del_sup_btn.clicked.connect(self.delete_supports)
-        self.supports_layout.addWidget(self.del_sup_btn)
-        self.sub_stack.addWidget(self.supports_tab)
-
-        # Loads Container Widget
-        self.loads_container_tab = QWidget()
-        self.loads_container_layout = QVBoxLayout(self.loads_container_tab)
-
-        self.load_type_selector = QComboBox()
-        self.load_type_selector.addItems(["Point Loads", "Moments", "q-Loads"])
-        self.loads_container_layout.addWidget(QLabel("Load Type:"))
-        self.loads_container_layout.addWidget(self.load_type_selector)
-        
-        self.load_stack = QStackedWidget()
-        self.load_type_selector.currentIndexChanged.connect(self.load_stack.setCurrentIndex)
-        self.loads_container_layout.addWidget(self.load_stack)
-
-        # Point Loads Sub-Tab
-        self.p_loads_sub_tab = QWidget()
-        self.p_loads_layout = QVBoxLayout(self.p_loads_sub_tab)
-        self.p_loads_table = QTableWidget(0, 3)
-        self.p_loads_table.setHorizontalHeaderLabels(["Node ID", "Fx (kN)", "Fz (kN)"])
-        self.p_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.p_loads_layout.addWidget(self.p_loads_table)
-        self.del_p_load_btn = QPushButton("Delete Selected Point Loads")
-        self.del_p_load_btn.clicked.connect(self.delete_loads)
-        self.p_loads_layout.addWidget(self.del_p_load_btn)
-        self.load_stack.addWidget(self.p_loads_sub_tab)
-
-        # Moments Sub-Tab
-        self.m_loads_sub_tab = QWidget()
-        self.m_loads_layout = QVBoxLayout(self.m_loads_sub_tab)
-        self.m_loads_table = QTableWidget(0, 2)
-        self.m_loads_table.setHorizontalHeaderLabels(["Node ID", "Moment (kNm)"])
-        self.m_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.m_loads_layout.addWidget(self.m_loads_table)
-        self.del_m_load_btn = QPushButton("Delete Selected Moments")
-        self.del_m_load_btn.clicked.connect(self.delete_loads)
-        self.m_loads_layout.addWidget(self.del_m_load_btn)
-        self.load_stack.addWidget(self.m_loads_sub_tab)
-
-        # q-Loads Sub-Tab
-        self.q_loads_sub_tab = QWidget()
-        self.q_loads_layout = QVBoxLayout(self.q_loads_sub_tab)
-        self.q_loads_table = QTableWidget(0, 6)
-        self.q_loads_table.setHorizontalHeaderLabels(["Element ID", "q Start", "q End", "qp Start", "qp End", "Direction"])
-        self.q_loads_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.q_loads_layout.addWidget(self.q_loads_table)
-        self.del_q_load_btn = QPushButton("Delete Selected q-Loads")
-        self.del_q_load_btn.clicked.connect(self.delete_loads)
-        self.q_loads_layout.addWidget(self.del_q_load_btn)
-        self.load_stack.addWidget(self.q_loads_sub_tab)
-
-        self.sub_stack.addWidget(self.loads_container_tab) # Add the new container to main sub_stack
-
-        # Connect change signals
-        self.elements_table.itemChanged.connect(lambda _: self.apply_changes())
-        self.nodes_table.itemChanged.connect(lambda _: self.apply_changes())
-        self.p_loads_table.itemChanged.connect(lambda _: self.apply_changes())
-        self.m_loads_table.itemChanged.connect(lambda _: self.apply_changes())
-        self.q_loads_table.itemChanged.connect(lambda _: self.apply_changes())
-
-        self.refresh_data()
-
-    def refresh_data(self):
-        model = self.parent_app.frames[self.parent_app.current_frame_name]
-        self.ss = model.system
-        
-        self.block_signals(True)
-        
-        # Elements
-        self.elements_table.setRowCount(0)
-        for i, e in enumerate(model.elements):
-            row = self.elements_table.rowCount()
-            self.elements_table.insertRow(row)
-            item_id = QTableWidgetItem(str(i + 1))
-            item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.elements_table.setItem(row, 0, item_id)
-            
-            nid1 = self.ss.find_node_id(vertex=e['loc'][0])
-            nid2 = self.ss.find_node_id(vertex=e['loc'][1])
-            self.elements_table.setItem(row, 1, QTableWidgetItem(str(nid1 or "?")))
-            self.elements_table.setItem(row, 2, QTableWidgetItem(str(nid2 or "?")))
-            self.elements_table.setItem(row, 3, QTableWidgetItem(str(e['EA'])))
-            self.elements_table.setItem(row, 4, QTableWidgetItem(str(e['EI'])))
-
-        # Nodes
-        self.nodes_table.setRowCount(0)
-        for n_id in sorted(self.ss.node_map.keys()):
-            node = self.ss.node_map[n_id]
-            row = self.nodes_table.rowCount()
-            self.nodes_table.insertRow(row)
-            item_id = QTableWidgetItem(str(n_id))
-            item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.nodes_table.setItem(row, 0, item_id)
-            self.nodes_table.setItem(row, 1, QTableWidgetItem(str(node.vertex.x)))
-            self.nodes_table.setItem(row, 2, QTableWidgetItem(str(node.vertex.y)))
-
-        # Supports
-        self.supports_table.setRowCount(0)
-        for s in model.supports:
-            nid = self.ss.find_node_id(vertex=s['loc'])
-            stype = s['type'].capitalize()
-            if stype == "Roll": stype += f" (dir={s['args'].get('direction', 2)})"
-            elif stype == "Spring": stype += f" (k={s['args'].get('k', 5000)})"
-            self._add_support_row(nid, stype)
-
-        # Point Loads
-        self.p_loads_table.setRowCount(0)
-        for p in model.point_loads:
-            nid = self.ss.find_node_id(vertex=p['loc'])
-            row = self.p_loads_table.rowCount()
-            self.p_loads_table.insertRow(row)
-            item = QTableWidgetItem(str(nid))
-            item.setData(Qt.ItemDataRole.UserRole, nid)
-            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.p_loads_table.setItem(row, 0, item)
-            self.p_loads_table.setItem(row, 1, QTableWidgetItem(str(p['Fx'])))
-            self.p_loads_table.setItem(row, 2, QTableWidgetItem(str(p['Fz'])))
-            
-        # Moment Loads
-        self.m_loads_table.setRowCount(0)
-        for m in model.moment_loads:
-            nid = self.ss.find_node_id(vertex=m['loc'])
-            row = self.m_loads_table.rowCount()
-            self.m_loads_table.insertRow(row)
-            item = QTableWidgetItem(str(nid))
-            item.setData(Qt.ItemDataRole.UserRole, nid)
-            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.m_loads_table.setItem(row, 0, item)
-            self.m_loads_table.setItem(row, 1, QTableWidgetItem(str(m['Ty'])))
-            
-        # q-Loads
-        self.q_loads_table.setRowCount(0)
-        for q in model.q_loads:
-            el_id = q['element_idx'] + 1
-            row = self.q_loads_table.rowCount()
-            self.q_loads_table.insertRow(row)
-            item = QTableWidgetItem(str(el_id))
-            item.setData(Qt.ItemDataRole.UserRole, el_id)
-            item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-            self.q_loads_table.setItem(row, 0, item)
-            
-            q_val = q.get('q', 0)
-            if isinstance(q_val, (list, tuple, np.ndarray)):
-                q_start, q_end = q_val[0], q_val[1] if len(q_val) > 1 else q_val[0]
-            else:
-                q_start = q_end = q_val
-                
-            qp_val = q.get('qp', 0)
-            if isinstance(qp_val, (list, tuple, np.ndarray)):
-                qp_start, qp_end = qp_val[0], qp_val[1] if len(qp_val) > 1 else qp_val[0]
-            else:
-                qp_start = qp_end = qp_val
-            
-            direction = q.get('dir', 'element')
-
-            # Clean floating point noise for display
-            def fmt(v): return str(v) if abs(v) > 1e-12 else "0.0"
-            self.q_loads_table.setItem(row, 1, QTableWidgetItem(fmt(q_start)))
-            self.q_loads_table.setItem(row, 2, QTableWidgetItem(fmt(q_end)))
-            self.q_loads_table.setItem(row, 3, QTableWidgetItem(fmt(qp_start)))
-            self.q_loads_table.setItem(row, 4, QTableWidgetItem(fmt(qp_end)))
-            
-            combo = QComboBox()
-            combo.addItems(["y", "x", "element", "parallel"])
-            combo.blockSignals(True)
-            combo.setCurrentText(str(direction))
-            combo.blockSignals(False)
-            combo.currentTextChanged.connect(lambda _: self.apply_changes())
-            self.q_loads_table.setCellWidget(row, 5, combo)
-
-        self.block_signals(False)
-
-    def _add_support_row(self, nid, type_str):
-        row = self.supports_table.rowCount()
-        self.supports_table.insertRow(row)
-        item_id = QTableWidgetItem(str(nid))
-        item_id.setFlags(item_id.flags() ^ Qt.ItemFlag.ItemIsEditable)
-        self.supports_table.setItem(row, 0, item_id)
-        
-        combo = QComboBox()
-        combo.addItems(["Fixed", "Hinged", "Roll", "Spring"])
-        if "Fixed" in type_str: combo.setCurrentText("Fixed")
-        elif "Hinged" in type_str: combo.setCurrentText("Hinged")
-        elif "Roll" in type_str: combo.setCurrentText("Roll")
-        elif "Spring" in type_str: combo.setCurrentText("Spring")
-        combo.currentTextChanged.connect(lambda _: self.apply_changes())
-        self.supports_table.setCellWidget(row, 1, combo)
-
-    def block_signals(self, block):
-        self.elements_table.blockSignals(block)
-        self.nodes_table.blockSignals(block)
-        self.p_loads_table.blockSignals(block)
-        self.m_loads_table.blockSignals(block)
-        self.load_type_selector.blockSignals(block)
-        self.q_loads_table.blockSignals(block)
-
-    def apply_changes(self, refresh=False):
-        """Extracts data from tables and triggers a system rebuild."""
-        node_coords = {}
-        for row in range(self.nodes_table.rowCount()):
-            try:
-                nid = int(self.nodes_table.item(row, 0).text())
-                x = float(self.nodes_table.item(row, 1).text())
-                y = float(self.nodes_table.item(row, 2).text())
-                node_coords[nid] = [x, y]
-            except (ValueError, AttributeError): continue
-        
-        element_props = {}
-        for row in range(self.elements_table.rowCount()):
-            try:
-                eid = int(self.elements_table.item(row, 0).text())
-                ea = float(self.elements_table.item(row, 3).text())
-                ei = float(self.elements_table.item(row, 4).text())
-                element_props[eid] = {'EA': ea, 'EI': ei}
-            except (ValueError, AttributeError): continue
-
-        # Extract supports and loads overrides
-        supports_info = {}
-        for row in range(self.supports_table.rowCount()):
-            try:
-                nid = int(self.supports_table.item(row, 0).text())
-                stype = self.supports_table.cellWidget(row, 1).currentText()
-                supports_info[nid] = stype
-            except (ValueError, AttributeError): continue
-
-        loads_info = []
-        # Point Loads
-        for row in range(self.p_loads_table.rowCount()):
-            try:
-                nid = int(self.p_loads_table.item(row, 0).text())
-                fx = float(self.p_loads_table.item(row, 1).text())
-                fz = float(self.p_loads_table.item(row, 2).text())
-                loads_info.append({'type': 'Point', 'id': nid, 'v1': fx, 'v2': fz})
-            except (ValueError, AttributeError): continue
-        
-        # Moments
-        for row in range(self.m_loads_table.rowCount()):
-            try:
-                nid = int(self.m_loads_table.item(row, 0).text())
-                ty = float(self.m_loads_table.item(row, 1).text())
-                loads_info.append({'type': 'Moment', 'id': nid, 'v1': ty, 'v2': 0})
-            except (ValueError, AttributeError): continue
-            
-        # q-Loads
-        for row in range(self.q_loads_table.rowCount()):
-            try:
-                eid = int(self.q_loads_table.item(row, 0).text())
-                q_start = float(self.q_loads_table.item(row, 1).text() or 0)
-                q_end = float(self.q_loads_table.item(row, 2).text() or 0)
-                qp_start = float(self.q_loads_table.item(row, 3).text() or 0)
-                qp_end = float(self.q_loads_table.item(row, 4).text() or 0)
-                direction = self.q_loads_table.cellWidget(row, 5).currentText()
-                q_val = q_start if q_start == q_end else [q_start, q_end]
-                qp_val = qp_start if qp_start == qp_end else [qp_start, qp_end]
-                loads_info.append({'type': 'q-Load', 'id': eid, 'v1': q_val, 'v2': direction, 'v3': qp_val})
-            except (ValueError, AttributeError): continue
-
-        self.parent_app.rebuild_system(
-            node_coords=node_coords, 
-            element_props=element_props,
-            supports_info=supports_info,
-            loads_info=loads_info
-        )
-        if refresh:
-            self.refresh_data()
-
-    def delete_elements(self):
-        for row in sorted(set(i.row() for i in self.elements_table.selectedIndexes()), reverse=True):
-            el_id = int(self.elements_table.item(row, 0).text())
-            if el_id in self.ss.element_map:
-                el = self.ss.element_map.pop(el_id)
-                self.ss.loads_q.pop(el_id, None)
-                for nid in [el.node_id1, el.node_id2]:
-                    if not any(e.node_id1 == nid or e.node_id2 == nid for e in self.ss.element_map.values()):
-                        self.ss.loads_point.pop(nid, None)
-                        self.ss.loads_moment.pop(nid, None)
-        self.apply_changes(refresh=True)
-
-    def delete_supports(self):
-        for row in sorted(set(i.row() for i in self.supports_table.selectedIndexes()), reverse=True):
-            nid_to_del = int(self.supports_table.item(row, 0).text())
-            
-            if hasattr(self.ss, 'supports_fixed'):
-                self.ss.supports_fixed = [n for n in self.ss.supports_fixed if n.id != nid_to_del]
-            if hasattr(self.ss, 'supports_hinged'):
-                self.ss.supports_hinged = [n for n in self.ss.supports_hinged if n.id != nid_to_del]
-
-            if hasattr(self.ss, 'supports_roll'):
-                new_rolls, new_dirs = [], []
-                for i, node in enumerate(self.ss.supports_roll):
-                    if node.id != nid_to_del:
-                        new_rolls.append(node)
-                        new_dirs.append(self.ss.supports_roll_direction[i])
-                self.ss.supports_roll = new_rolls
-                self.ss.supports_roll_direction = new_dirs
-
-            if hasattr(self.ss, 'supports_spring_args'):
-                self.ss.supports_spring_args = [s for s in self.ss.supports_spring_args if s[0] != nid_to_del]
-            for attr in ['supports_spring_x', 'supports_spring_y', 'supports_spring_z']:
-                if hasattr(self.ss, attr):
-                    filtered_list = [s for s in getattr(self.ss, attr) if s[0].id != nid_to_del]
-                    setattr(self.ss, attr, filtered_list)
-        self.apply_changes(refresh=True)
-
-    def delete_loads(self):
-        # Determine which table is active
-        load_type_idx = self.load_type_selector.currentIndex()
-        # Indices: 0: Point Loads, 1: Moments, 2: q-Loads
-        if load_type_idx == 0:
-            table = self.p_loads_table
-            ltype = 'Point'
-        elif load_type_idx == 1:
-            table = self.m_loads_table
-            ltype = 'Moment'
-        elif load_type_idx == 2:
-            table = self.q_loads_table
-            ltype = 'q-Load'
-        else:
-            return
-
-        rows = sorted(set(i.row() for i in table.selectedIndexes()), reverse=True)
-        for row in rows:
-            key = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            if ltype == 'Point': self.ss.loads_point.pop(key, None)
-            elif ltype == 'Moment': self.ss.loads_moment.pop(key, None)
-            elif ltype == 'q-Load': self.ss.loads_q.pop(key, None)
-        
-        self.apply_changes(refresh=True)
+from models import FrameModel
+from widgets import ElementManagerWidget
+from plotter import StructuralPlotter
 
 class StructuralApp(QMainWindow):
     def __init__(self):
@@ -436,11 +42,6 @@ class StructuralApp(QMainWindow):
         self.current_frame_name = "Frame 1"
         self.ss = self.frames[self.current_frame_name].system
         self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float}}
-        
-        # View State for Pan/Zoom
-        self.press = None
-        self.view_xlim = None
-        self.view_ylim = None
         
         self.init_ui()
 
@@ -498,7 +99,6 @@ class StructuralApp(QMainWindow):
         self.grid_z_table.setItem(2, 0, QTableWidgetItem("Floor 2"))
         self.grid_z_table.setItem(2, 1, QTableWidgetItem("3.5"))
         
-        self.grid_z_table.itemChanged.connect(self.update_plot)
         self.grid_z_table.itemChanged.connect(self.update_floor_levels)
         
         z_btns = QHBoxLayout()
@@ -509,8 +109,6 @@ class StructuralApp(QMainWindow):
         z_btns.addWidget(add_z_btn)
         z_btns.addWidget(del_z_btn)
 
-        self.grid_x_input.textChanged.connect(self.update_plot)
-        self.grid_y_input.textChanged.connect(self.update_plot)
         grid_settings_form.addRow("X Spacings (1,2,3...):", self.grid_x_input)
         grid_settings_form.addRow("Y Spacings (A,B,C...):", self.grid_y_input)
         grid_settings_form.addRow("Z Elevations:", self.grid_z_table)
@@ -523,7 +121,6 @@ class StructuralApp(QMainWindow):
         self.grid_table = QTableWidget(0, 3)
         self.grid_table.setHorizontalHeaderLabels(["Grid Line", "Frame", "Offset"])
         self.grid_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.grid_table.itemChanged.connect(self.update_plot)
         grid_assign_layout.addWidget(self.grid_table)
         
         grid_btns = QHBoxLayout()
@@ -849,47 +446,50 @@ class StructuralApp(QMainWindow):
         self.canvas = self.figure.canvas
         self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         viz_layout.addWidget(self.canvas, stretch=1)
-
-        # Connect Pan/Zoom events
-        self.canvas.mpl_connect('scroll_event', self.on_scroll)
-        self.canvas.mpl_connect('button_press_event', self.on_press)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
-        self.canvas.mpl_connect('motion_notify_event', self.on_motion)
+        
+        # Initialize Plotter
+        self.plotter = StructuralPlotter(self)
+        
+        # Connect signals that were deferred until plotter creation
+        self.grid_z_table.itemChanged.connect(self.plotter.update_plot)
+        self.grid_x_input.textChanged.connect(self.plotter.update_plot)
+        self.grid_y_input.textChanged.connect(self.plotter.update_plot)
+        self.grid_table.itemChanged.connect(self.plotter.update_plot)
 
         # --- VISUALIZATION TOOLBAR (Below Plot) ---
         viz_toolbar = QHBoxLayout()
         
         self.view_mode = QComboBox()
         self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan"])
-        self.view_mode.currentTextChanged.connect(self.update_plot)
+        self.view_mode.currentTextChanged.connect(self.plotter.update_plot)
         
         self.floor_selector = QComboBox()
         self.floor_selector.setEnabled(False)
-        self.floor_selector.currentTextChanged.connect(self.update_plot)
+        self.floor_selector.currentTextChanged.connect(self.plotter.update_plot)
         
         self.scale_slider = QSlider(Qt.Orientation.Horizontal)
         self.scale_slider.setRange(1, 100)
         self.scale_slider.setValue(10)
         self.scale_slider.setFixedWidth(150)
-        self.scale_slider.valueChanged.connect(self.update_plot)
+        self.scale_slider.valueChanged.connect(self.plotter.update_plot)
 
         self.show_grid = QCheckBox("Grid")
         self.show_grid.setChecked(True)
-        self.show_grid.stateChanged.connect(self.update_plot)
+        self.show_grid.stateChanged.connect(self.plotter.update_plot)
 
         self.show_ticks = QCheckBox("Ticks")
         self.show_ticks.setChecked(True)
-        self.show_ticks.stateChanged.connect(self.update_plot)
+        self.show_ticks.stateChanged.connect(self.plotter.update_plot)
 
         self.show_grid_labels = QCheckBox("Grid Labels")
         self.show_grid_labels.setChecked(True)
-        self.show_grid_labels.stateChanged.connect(self.update_plot)
+        self.show_grid_labels.stateChanged.connect(self.plotter.update_plot)
 
         self.show_beam_marks = QCheckBox("Beam Marks")
-        self.show_beam_marks.stateChanged.connect(self.update_plot)
+        self.show_beam_marks.stateChanged.connect(self.plotter.update_plot)
 
         reset_view_btn = QPushButton("Fit View")
-        reset_view_btn.clicked.connect(self.reset_view)
+        reset_view_btn.clicked.connect(self.plotter.reset_view)
 
         viz_toolbar.addWidget(QLabel("View:"))
         viz_toolbar.addWidget(self.view_mode)
@@ -930,7 +530,7 @@ class StructuralApp(QMainWindow):
 
         if text == "Slabs":
             self.view_mode.setCurrentText("Grid Plan")
-            self.update_plot()
+            self.plotter.update_plot()
         elif text == "Grid":
             self.sync_grid_frame_combos()
         elif text == "Element Manager":
@@ -984,18 +584,18 @@ class StructuralApp(QMainWindow):
         combo.addItems(list(self.frames.keys()))
         if prev_frame in self.frames:
             combo.setCurrentText(prev_frame)
-        combo.currentTextChanged.connect(self.update_plot)
+        combo.currentTextChanged.connect(self.plotter.update_plot)
         self.grid_table.setCellWidget(row, 1, combo)
         
         self.grid_table.setItem(row, 2, QTableWidgetItem(prev_offset))
         self.grid_table.blockSignals(False)
-        self.update_plot()
+        self.plotter.update_plot()
 
     def delete_grid_assignment(self):
         rows = sorted(set(i.row() for i in self.grid_table.selectedIndexes()), reverse=True)
         for row in rows:
             self.grid_table.removeRow(row)
-        self.update_plot()
+        self.plotter.update_plot()
 
     def add_slab(self):
         row = self.slabs_table.rowCount()
@@ -1030,7 +630,7 @@ class StructuralApp(QMainWindow):
                 if pts:
                     self.slabs[name] = {'points': pts, 'load': load}
             except (ValueError, AttributeError): continue
-        self.update_plot()
+        self.plotter.update_plot()
 
     def parse_grid_point(self, pt_str):
         pt_str = pt_str.strip().upper()
@@ -1134,7 +734,7 @@ class StructuralApp(QMainWindow):
                 # Irregular slab: Fallback or simplified distribution could be added here
                 pass
 
-        self.update_plot()
+        self.plotter.update_plot()
         QMessageBox.information(self, "Success", "Slab loads distributed to frames.")
 
     def apply_specialized_load(self, frame_name, eid, ltype, peak, pos1, pos2=0.75):
@@ -1203,7 +803,7 @@ class StructuralApp(QMainWindow):
         if hasattr(self, 'element_mgr_widget') and self.sidebar_selector.currentText() == "Element Manager":
             self.element_mgr_widget.refresh_data()
             
-        self.reset_view() # Auto-fit when switching
+        self.plotter.reset_view() # Auto-fit when switching
 
     def rename_frame(self):
         curr_item = self.frame_list.currentItem()
@@ -1284,7 +884,7 @@ class StructuralApp(QMainWindow):
         if current_sel in levels:
             self.floor_selector.setCurrentText(current_sel)
         self.floor_selector.blockSignals(False)
-        self.update_plot()
+        self.plotter.update_plot()
 
     def duplicate_frame(self):
         curr_item = self.frame_list.currentItem()
@@ -1351,50 +951,6 @@ class StructuralApp(QMainWindow):
             v = ss.node_map[nid].vertex
             ty = data[0] if isinstance(data, (list, tuple)) else (data.get('Ty', 0) if isinstance(data, dict) else data)
             model.moment_loads.append({'loc': [v.x, v.y], 'Ty': ty})
-
-    # --- PAN & ZOOM HANDLERS ---
-    def on_scroll(self, event):
-        if event.inaxes != self.ax: return
-        self.ax.set_aspect('equal', adjustable='box')
-        base_scale = 1.2
-        scale_factor = 1 / base_scale if event.button == 'up' else base_scale
-        x_min, x_max = self.ax.get_xlim(); y_min, y_max = self.ax.get_ylim()
-        new_width, new_height = (x_max - x_min) * scale_factor, (y_max - y_min) * scale_factor
-        rel_x, rel_y = (event.xdata - x_min) / (x_max - x_min), (event.ydata - y_min) / (y_max - y_min)
-        self.view_xlim = [event.xdata - rel_x * new_width, event.xdata + (1 - rel_x) * new_width]
-        self.view_ylim = [event.ydata - rel_y * new_height, event.ydata + (1 - rel_y) * new_height]
-        self.ax.set_xlim(self.view_xlim); self.ax.set_ylim(self.view_ylim)
-        self.canvas.draw_idle()
-
-    def on_press(self, event):
-        if event.button == 2: 
-            self.ax.set_aspect('equal', adjustable='box')
-            self.press = event.x, event.y, self.ax.get_xlim(), self.ax.get_ylim()
-
-    def on_release(self, event): self.press = None
-
-    def on_motion(self, event):
-        if self.press is None or event.inaxes != self.ax or event.x is None or event.y is None: return
-        start_x, start_y, x_lim, y_lim = self.press
-        
-        dx_pix = event.x - start_x
-        dy_pix = event.y - start_y
-        
-        width_pix = self.ax.bbox.width
-        height_pix = self.ax.bbox.height
-        
-        dx_data = dx_pix * (x_lim[1] - x_lim[0]) / width_pix
-        dy_data = dy_pix * (y_lim[1] - y_lim[0]) / height_pix
-        
-        self.view_xlim = [x_lim[0] - dx_data, x_lim[1] - dx_data]
-        self.view_ylim = [y_lim[0] - dy_data, y_lim[1] - dy_data]
-        self.ax.set_xlim(self.view_xlim); self.ax.set_ylim(self.view_ylim)
-        self.canvas.draw_idle()
-
-    def reset_view(self):
-        self.view_xlim = None
-        self.view_ylim = None
-        self.update_plot()
 
     def get_material(self):
         return float(self.ea_input.text()), float(self.ei_input.text())
@@ -1675,7 +1231,7 @@ class StructuralApp(QMainWindow):
                 self.ss.q_load(q=clean_val(q['q']), element_id=eid, direction=q['dir'], q_perp=clean_val(q.get('qp')))
 
         if self.view_mode.currentText() == "Structure":
-            self.update_plot()
+            self.plotter.update_plot()
         else:
             self.view_mode.setCurrentText("Structure")
 
@@ -1901,7 +1457,7 @@ class StructuralApp(QMainWindow):
         try:
             self.ss.solve()
             QMessageBox.information(self, "Success", "Analysis Complete.")
-            self.update_plot()
+            self.plotter.update_plot()
         except Exception as e:
             QMessageBox.critical(self, "Solver Error", str(e))
 
@@ -2018,243 +1574,6 @@ class StructuralApp(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export: {e}")
-
-    def update_plot(self):
-        # Clear the axes for the new plot
-        self.ax.clear()
-        
-        # Check if there are elements to plot
-        if not self.ss.element_map:
-            self.canvas.draw()
-            return
-
-        # Get current figure size to maintain aspect ratio logic in anastruct
-        current_figsize = self.figure.get_size_inches()
-
-        mode = self.view_mode.currentText()
-        factor = self.scale_slider.value()
-
-        # Update UI state
-        self.floor_selector.setEnabled(mode == "Grid Plan")
-        self.show_beam_marks.setEnabled(mode == "Grid Plan")
-
-        def prepare_plotter():
-            # Ensure anastruct uses our existing axes and figure
-            self.ss.plotter.axes = [self.ax]
-            self.ss.plotter.fig = self.figure
-            self.ss.plotter.figure = self.figure
-            self.ax.set_aspect('equal', adjustable='box')
-
-        try:
-            if mode == "Structure":
-                prepare_plotter()
-                self.ss.plotter.plot_structure(
-                    figsize=current_figsize, verbosity=0, show=False, gridplot=True, annotations=False
-                )
-            elif mode == "Displacement":
-                prepare_plotter()
-                self.ss.plotter.displacements(
-                    factor=factor, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Axial Force":
-                prepare_plotter()
-                self.ss.plotter.axial_force(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Shear Force":
-                prepare_plotter()
-                self.ss.plotter.shear_force(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Bending Moment":
-                prepare_plotter()
-                self.ss.plotter.bending_moment(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Grid Plan":
-                # Custom drawing for Top View Grid
-                self.ax.set_axis_off()
-                alphabet = string.ascii_uppercase
-                
-                # 1. Parse spacings
-                try:
-                    sx = [float(s.strip()) for s in self.grid_x_input.text().split(',') if s.strip()]
-                    sy = [float(s.strip()) for s in self.grid_y_input.text().split(',') if s.strip()]
-                except ValueError:
-                    sx, sy = [], []
-                    
-                gx = [0.0] + list(np.cumsum(sx))
-                gy = [0.0] + list(np.cumsum(sy))
-                
-                # 2. Draw Grid Lines (Dotted)
-                if self.show_grid.isChecked():
-                    for x in gx:
-                        self.ax.axvline(x, color='gray', linestyle=':', linewidth=1.0)
-                    for y in gy:
-                        self.ax.axhline(y, color='gray', linestyle=':', linewidth=1.0)
-                    
-                # 2.5 Draw Slabs
-                for name, data in self.slabs.items():
-                    pts = []
-                    for x_idx, y_idx in data['points']:
-                        if x_idx < len(gx) and y_idx < len(gy):
-                            pts.append([gx[x_idx], gy[y_idx]])
-                    if pts:
-                        poly = plt.Polygon(pts, closed=True, facecolor='orange', alpha=0.3, edgecolor='darkorange', linewidth=2)
-                        self.ax.add_patch(poly)
-                        cx, cy = np.mean([p[0] for p in pts]), np.mean([p[1] for p in pts])
-                        self.ax.text(cx, cy, name, ha='center', va='center', color='darkred', fontweight='bold', fontsize=10)
-
-                # 3. Labels
-                if self.show_grid_labels.isChecked():
-                    for i, x in enumerate(gx):
-                        self.ax.text(x, gy[0] - 0.5, str(i+1), ha='center', va='top', color='black', fontweight='bold')
-                    for i, y in enumerate(gy):
-                        label = alphabet[i] if i < len(alphabet) else f"Z{i}"
-                        self.ax.text(gx[0] - 0.5, y, label, ha='right', va='center', color='black', fontweight='bold')
-                    
-                # Extract selected height and next height
-                try:
-                    current_idx = self.floor_selector.currentIndex()
-                    sel_text = self.floor_selector.currentText()
-                    sel_height = float(sel_text.split('(')[1].split('m')[0])
-                    
-                    if current_idx < self.floor_selector.count() - 1:
-                        next_text = self.floor_selector.itemText(current_idx + 1)
-                        next_height = float(next_text.split('(')[1].split('m')[0])
-                    else:
-                        next_height = None
-                except (IndexError, ValueError):
-                    sel_height = 0.0
-                    next_height = None
-
-                # 4. Draw Frames
-                for row in range(self.grid_table.rowCount()):
-                    line_item = self.grid_table.item(row, 0)
-                    offset_item = self.grid_table.item(row, 2)
-                    if not line_item or not offset_item: continue
-                    
-                    line_label = line_item.text().upper()
-                    frame_name = self.grid_table.cellWidget(row, 1).currentText()
-                    try:
-                        offset = float(offset_item.text())
-                    except ValueError: offset = 0.0
-                    
-                    if frame_name not in self.frames: continue
-                    f_model = self.frames[frame_name]
-                    f_ss = f_model.system
-                    if not f_ss.element_map: continue
-                    
-                    # Filter by height: show only frames that reach this height
-                    max_frame_y = max(n.vertex.y for n in f_ss.node_map.values())
-                    if max_frame_y < sel_height:
-                        continue
-                    
-                    # Find beams at this height for marking
-                    beams_at_h = []
-                    for eid, el in f_ss.element_map.items():
-                        n1 = f_ss.node_map[el.node_id1].vertex
-                        n2 = f_ss.node_map[el.node_id2].vertex
-                        if np.isclose(n1.y, sel_height) and np.isclose(n2.y, sel_height):
-                            beams_at_h.append(el)
-
-                    # Find columns starting at this height and going to next_height
-                    columns_at_h = []
-                    if next_height is not None:
-                        for eid, el in f_ss.element_map.items():
-                            n1 = f_ss.node_map[el.node_id1].vertex
-                            n2 = f_ss.node_map[el.node_id2].vertex
-                            h_coords = sorted([n1.y, n2.y])
-                            if np.isclose(h_coords[0], sel_height) and np.isclose(h_coords[1], next_height):
-                                if np.isclose(n1.x, n2.x):
-                                    columns_at_h.append(el)
-                    
-                    if line_label.isdigit(): # Vertical line (1, 2, 3...)
-                        idx = int(line_label) - 1
-                        if idx < len(gx):
-                            pos_x = gx[idx]
-                            
-                            # Plot beams
-                            for el in beams_at_h:
-                                n1 = f_ss.node_map[el.node_id1].vertex
-                                n2 = f_ss.node_map[el.node_id2].vertex
-                                self.ax.plot([pos_x, pos_x], [gy[0] + offset + n1.x, gy[0] + offset + n2.x], color='cyan', linewidth=3)
-                                
-                                if self.show_beam_marks.isChecked():
-                                    mid_x = (n1.x + n2.x) / 2.0
-                                    self.ax.text(pos_x + 0.2, gy[0] + offset + mid_x, f"B:{frame_name}-{el.id}", 
-                                                 color='blue', fontsize=8, fontweight='bold', va='center')
-                            
-                            # Plot columns and marks
-                            if self.show_beam_marks.isChecked():
-                                for el in columns_at_h:
-                                    n1 = f_ss.node_map[el.node_id1].vertex
-                                    pos_y = gy[0] + offset + n1.x
-                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
-                                    self.ax.text(pos_x - 0.2, pos_y, f"C:{frame_name}-{el.id}", 
-                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='right', va='center')
-
-                    else: # Horizontal line (A, B, C...)
-                        idx = alphabet.find(line_label)
-                        if idx != -1 and idx < len(gy):
-                            pos_y = gy[idx]
-
-                            # Plot beams
-                            for el in beams_at_h:
-                                n1 = f_ss.node_map[el.node_id1].vertex
-                                n2 = f_ss.node_map[el.node_id2].vertex
-                                self.ax.plot([gx[0] + offset + n1.x, gx[0] + offset + n2.x], [pos_y, pos_y], color='cyan', linewidth=3)
-                                
-                                if self.show_beam_marks.isChecked():
-                                    mid_x = (n1.x + n2.x) / 2.0
-                                    self.ax.text(gx[0] + offset + mid_x, pos_y + 0.2, f"B:{frame_name}-{el.id}", 
-                                                 color='blue', fontsize=8, fontweight='bold', ha='center')
-
-                            # Plot columns and marks
-                            if self.show_beam_marks.isChecked():
-                                for el in columns_at_h:
-                                    n1 = f_ss.node_map[el.node_id1].vertex
-                                    pos_x = gx[0] + offset + n1.x
-                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
-                                    self.ax.text(pos_x, pos_y - 0.2, f"C:{frame_name}-{el.id}", 
-                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='center', va='top')
-
-                self.ax.set_aspect('equal', adjustable='box')
-                self.ax.autoscale_view()
-
-        except Exception as e:
-            print(f"Plotting error: {type(e).__name__}: {e}")
-            # Fallback to structure view and update UI if results aren't available
-            if mode != "Structure":
-                self.view_mode.blockSignals(True)
-                self.view_mode.setCurrentText("Structure")
-                self.view_mode.blockSignals(False)
-                try:
-                    prepare_plotter()
-                    self.ss.plotter.plot_structure(
-                        figsize=current_figsize, verbosity=0, show=False, gridplot=True, annotations=False
-                    )
-                except Exception:
-                    pass
-        
-        # Apply grid and tick settings
-        if mode != "Grid Plan":
-            # Control axis visibility (ticks, labels, spines)
-            self.ax.set_axis_on() if self.show_ticks.isChecked() else self.ax.set_axis_off()
-
-            # Control grid visibility independently
-            self.ax.grid(self.show_grid.isChecked())
-
-        # Ensure aspect ratio is handled correctly to avoid console warnings
-        self.ax.set_aspect('equal', adjustable='box')
-
-        # Restore view state
-        if self.view_xlim:
-            self.ax.set_xlim(self.view_xlim)
-            self.ax.set_ylim(self.view_ylim)
-
-        # Refresh the canvas
-        self.canvas.draw()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
