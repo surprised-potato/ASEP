@@ -1,0 +1,138 @@
+
+============================================================
+concrete-properties Investigation Run: 2025-12-26 03:02:05
+============================================================
+concrete-properties Version: Unknown
+concrete-properties File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/concreteproperties/__init__.py
+sectionproperties Version: Unknown
+sectionproperties File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/sectionproperties/__init__.py
+
+--- Model Setup ---
+  - Created Concrete material object.
+  - Created SteelBar material object.
+  - Created section geometry with reinforcement.
+  - Initialized ConcreteSection object.
+
+--- Initial ConcreteSection Object Inspection ---
+  - all_geometries                 | Type: list
+  - compound_geometry              | Type: CompoundGeometry
+  - concrete_geometries            | Type: list
+  - default_units                  | Type: UnitDisplay
+  - gross_properties               | Type: GrossProperties
+  - meshed_geometries              | Type: list
+  - moment_centroid                | Type: tuple
+  - reinf_geometries_lumped        | Type: list
+  - reinf_geometries_meshed        | Type: list
+  - strand_geometries              | Type: list
+
+--- Analysis & Result Object Inspection ---
+  - Called get_gross_properties().
+    - Result object type: GrossProperties
+    - Attributes on GrossProperties object:
+      - conc_ultimate_strain      | Type: float
+      - concrete_area             | Type: float
+      - cx                        | Type: float
+      - cx_gross                  | Type: float
+      - cy                        | Type: float
+      - cy_gross                  | Type: float
+      - default_units             | Type: UnitDisplay
+      - e_a                       | Type: float
+      - e_i11                     | Type: float64
+      - e_i22                     | Type: float64
+      - e_ixx_c                   | Type: float64
+      - e_ixx_g                   | Type: float64
+      - e_ixy_c                   | Type: float64
+      - e_ixy_g                   | Type: float64
+      - e_iyy_c                   | Type: float64
+      - e_iyy_g                   | Type: float64
+      - e_qx                      | Type: float
+      - e_qy                      | Type: float
+      - e_z11_minus               | Type: float64
+      - e_z11_plus                | Type: float64
+      - e_z22_minus               | Type: float64
+      - e_z22_plus                | Type: float64
+      - e_zxx_minus               | Type: float64
+      - e_zxx_plus                | Type: float64
+      - e_zyy_minus               | Type: float64
+      - e_zyy_plus                | Type: float64
+      - m_prestress               | Type: int
+      - mass                      | Type: float
+      - n_prestress               | Type: int
+      - perimeter                 | Type: float
+      - phi                       | Type: int
+      - qx_gross                  | Type: float
+      - qy_gross                  | Type: float
+      - reinf_lumped_area         | Type: float
+      - reinf_meshed_area         | Type: int
+      - strand_area               | Type: int
+      - total_area                | Type: float
+    - JSON Serialization Test (GrossProperties):
+      - `_results` attribute not found on GrossProperties object.
+
+  - Called calculate_cracked_properties().
+    - Result object type: CrackedResults
+    - Attributes on CrackedProperties object:
+      - a_cr                      | Type: NoneType
+      - cracked_geometries        | Type: list
+      - cx                        | Type: float
+      - cy                        | Type: float
+      - d_nc                      | Type: float
+      - default_units             | Type: UnitDisplay
+      - e_a_cr                    | Type: float
+      - e_i11_cr                  | Type: float64
+      - e_i22_cr                  | Type: float64
+      - e_iuu_cr                  | Type: float64
+      - e_ixx_c_cr                | Type: float64
+      - e_ixx_g_cr                | Type: float64
+      - e_ixy_c_cr                | Type: float64
+      - e_ixy_g_cr                | Type: float64
+      - e_iyy_c_cr                | Type: float64
+      - e_iyy_g_cr                | Type: float64
+      - e_qx_cr                   | Type: float
+      - e_qy_cr                   | Type: float
+      - elastic_modulus_ref       | Type: NoneType
+      - i11_cr                    | Type: NoneType
+      - i22_cr                    | Type: NoneType
+      - iuu_cr                    | Type: NoneType
+      - ixx_c_cr                  | Type: NoneType
+      - ixx_g_cr                  | Type: NoneType
+      - ixy_c_cr                  | Type: NoneType
+      - ixy_g_cr                  | Type: NoneType
+      - iyy_c_cr                  | Type: NoneType
+      - iyy_g_cr                  | Type: NoneType
+      - m                         | Type: int
+      - m_cr                      | Type: float64
+      - n                         | Type: int
+      - phi_cr                    | Type: int
+      - qx_cr                     | Type: NoneType
+      - qy_cr                     | Type: NoneType
+      - theta                     | Type: int
+
+  - Called moment_interaction_diagram().
+    - Result object type: MomentInteractionResults
+    - The 'results' list contains objects of type: UltimateBendingResults
+    - Attributes on the inner UltimateBendingResults object:
+      - d_n                       | Type: float
+      - default_units             | Type: UnitDisplay
+      - k_u                       | Type: float64
+      - label                     | Type: NoneType
+      - m_x                       | Type: float64
+      - m_xy                      | Type: float64
+      - m_y                       | Type: float64
+      - n                         | Type: float64
+      - theta                     | Type: int
+
+--- Method Signatures ---
+get_gross_properties               : () -> 'res.GrossProperties'
+get_transformed_gross_properties   : (elastic_modulus: 'float') -> 'res.TransformedGrossProperties'
+calculate_cracked_properties       : (theta: 'float' = 0) -> 'res.CrackedResults'
+moment_curvature_analysis          : (theta: 'float' = 0, n: 'float' = 0, kappa0: 'float' = 0, kappa_inc: 'float' = 1e-07, kappa_mult: 'float' = 2, kappa_inc_max: 'float' = 5e-06, delta_m_min: 'float' = 0.15, delta_m_max: 'float' = 0.3, progress_bar: 'bool' = True) -> 'res.MomentCurvatureResults'
+ultimate_bending_capacity          : (theta: 'float' = 0, n: 'float' = 0) -> 'res.UltimateBendingResults'
+moment_interaction_diagram         : (theta: 'float' = 0, limits: 'list[tuple[str, float]] | None' = None, control_points: 'list[tuple[str, float]] | None' = None, labels: 'list[str] | None' = None, n_points: 'int' = 24, n_spacing: 'int | None' = None, max_comp: 'float | None' = None, max_comp_labels: 'list[str] | None' = None, progress_bar: 'bool' = True) -> 'res.MomentInteractionResults'
+biaxial_bending_diagram            : (n: 'float' = 0, n_points: 'int' = 48, progress_bar: 'bool' = True) -> 'res.BiaxialBendingResults'
+calculate_uncracked_stress         : (n: 'float' = 0, m_x: 'float' = 0, m_y: 'float' = 0) -> 'res.StressResult'
+calculate_cracked_stress           : (cracked_results: 'res.CrackedResults', n: 'float' = 0, m: 'float' = 0) -> 'res.StressResult'
+calculate_service_stress           : (moment_curvature_results: 'res.MomentCurvatureResults', m: 'float', kappa: 'float | None' = None) -> 'res.StressResult'
+calculate_ultimate_stress          : (ultimate_results: 'res.UltimateBendingResults') -> 'res.StressResult'
+
+--- End of Log ---

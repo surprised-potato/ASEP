@@ -1,7 +1,11 @@
 import os
 import datetime
 import inspect
-from anastruct import SystemElements
+import sys
+
+# Delay import to allow logging of ImportError
+SystemElements = None
+anastruct = None
 
 def investigate():
     # Setup output directory and file
@@ -19,11 +23,15 @@ def investigate():
         f.write(f"{'='*60}\n")
         
         try:
-            import anastruct
+            global anastruct, SystemElements
+            import anastruct as anastruct_pkg
+            anastruct = anastruct_pkg
+            from anastruct import SystemElements
             f.write(f"Anastruct Package Version: {getattr(anastruct, '__version__', 'Unknown')}\n")
             f.write(f"Anastruct File: {anastruct.__file__}\n\n")
         except ImportError:
             f.write("Anastruct package not found via standard import check.\n\n")
+            return
 
         ss = SystemElements()
         f.write("Initialized SystemElements()\n")
@@ -166,6 +174,17 @@ def investigate():
                     f.write("  - reaction_forces is directly serializable.\n")
                 except TypeError as e:
                     f.write(f"  - reaction_forces serialization failed as expected: {e}\n")
+                    # Verify if it is numpy types causing the issue
+                    try:
+                        import numpy as np
+                        class NumpyEncoder(json.JSONEncoder):
+                            def default(self, obj):
+                                if isinstance(obj, (np.int_, np.intc, np.intp, np.float64)): return float(obj)
+                                return super().default(obj)
+                        json.dumps(ss_res.reaction_forces, cls=NumpyEncoder)
+                        f.write("  - Serialization successful using NumpyEncoder.\n")
+                    except Exception as e2:
+                        f.write(f"  - Even with NumpyEncoder, serialization failed: {e2}\n")
 
             except Exception as e:
                 f.write(f"  - Result discovery failed: {type(e).__name__}: {e}\n")

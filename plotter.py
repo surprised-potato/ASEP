@@ -1,6 +1,7 @@
 import string
 import numpy as np
 import matplotlib.pyplot as plt
+import traceback
 from mpl_toolkits.mplot3d import Axes3D
 
 class StructuralPlotter:
@@ -9,7 +10,7 @@ class StructuralPlotter:
         self.ax = self.main.ax
         self.figure = self.main.figure
         self.canvas = self.main.canvas
-        
+
         # View State
         self.press = None
         self.view_xlim = None
@@ -22,409 +23,218 @@ class StructuralPlotter:
         self.canvas.mpl_connect('motion_notify_event', self.on_motion)
 
     def _ensure_axes(self, projection='2d'):
-        """Ensures the axes has the correct projection, recreating if necessary."""
-        target = '3d' if projection == '3d' else 'rectilinear'
-        if self.ax.name != target:
+        """Recreates axes if the projection type changes (e.g., 2D to 3D)."""
+        target_proj = '3d' if projection == '3d' else 'rectilinear'
+        if not hasattr(self.ax, 'name') or self.ax.name != target_proj:
             self.figure.clear()
             if projection == '3d':
                 self.ax = self.figure.add_subplot(111, projection='3d')
             else:
                 self.ax = self.figure.add_subplot(111)
-            # Update references
             self.main.ax = self.ax
 
     def update_plot(self):
         mode = self.main.view_mode.currentText()
-        self._ensure_axes('3d' if mode == "3D Wireframe" else '2d')
 
-        # Clear the axes for the new plot
+        # Determine required projection and clear axes
+        if mode == "3D Wireframe":
+            self._ensure_axes('3d')
+        else:
+            self._ensure_axes('2d')
         self.ax.clear()
-        
-        # Check if there are elements to plot
-        if not self.main.ss.element_map:
-            self.canvas.draw()
-            return
-
-        # Get current figure size to maintain aspect ratio logic in anastruct
-        current_figsize = self.figure.get_size_inches()
-
-        factor = self.main.scale_slider.value()
-
-        # Update UI state
-        self.main.floor_selector.setEnabled(mode == "Grid Plan")
-        self.main.show_beam_marks.setEnabled(mode == "Grid Plan")
-        self.main.lock_3d_rotation.setEnabled(mode == "3D Wireframe")
-
-        def prepare_plotter():
-            # Ensure anastruct uses our existing axes and figure
-            self.main.ss.plotter.axes = [self.ax]
-            self.main.ss.plotter.fig = self.figure
-            self.main.ss.plotter.figure = self.figure
-            self.ax.set_aspect('equal', adjustable='box')
 
         try:
-            if mode == "Structure":
-                prepare_plotter()
-                self.main.ss.plotter.plot_structure(
-                    figsize=current_figsize, verbosity=0, show=False, gridplot=True, annotations=False
-                )
-            elif mode == "Displacement":
-                prepare_plotter()
-                self.main.ss.plotter.displacements(
-                    factor=factor, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Axial Force":
-                prepare_plotter()
-                self.main.ss.plotter.axial_force(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Shear Force":
-                prepare_plotter()
-                self.main.ss.plotter.shear_force(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Bending Moment":
-                prepare_plotter()
-                self.main.ss.plotter.bending_moment(
-                    factor=None, figsize=current_figsize, verbosity=0, show=False, gridplot=True
-                )
-            elif mode == "Grid Plan":
-                # Custom drawing for Top View Grid
-                self.ax.set_axis_off()
-                self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
-                alphabet = string.ascii_uppercase
-                
-                # 1. Parse spacings
-                try:
-                    sx = [float(s.strip()) for s in self.main.grid_x_input.text().split(',') if s.strip()]
-                    sy = [float(s.strip()) for s in self.main.grid_y_input.text().split(',') if s.strip()]
-                except ValueError:
-                    sx, sy = [], []
-                    
-                gx = [0.0] + list(np.cumsum(sx))
-                gy = [0.0] + list(np.cumsum(sy))
-                
-                # 2. Draw Grid Lines (Dotted)
-                if self.main.show_grid.isChecked():
-                    for x in gx:
-                        self.ax.axvline(x, color='gray', linestyle=':', linewidth=1.0)
-                    for y in gy:
-                        self.ax.axhline(y, color='gray', linestyle=':', linewidth=1.0)
-                    
-                # 2.5 Draw Slabs
-                for name, data in self.main.slabs.items():
-                    pts = []
-                    for x_idx, y_idx in data['points']:
-                        if x_idx < len(gx) and y_idx < len(gy):
-                            pts.append([gx[x_idx], gy[y_idx]])
-                    if pts:
-                        poly = plt.Polygon(pts, closed=True, facecolor='orange', alpha=0.3, edgecolor='darkorange', linewidth=2)
-                        self.ax.add_patch(poly)
-                        cx, cy = np.mean([p[0] for p in pts]), np.mean([p[1] for p in pts])
-                        self.ax.text(cx, cy, name, ha='center', va='center', color='darkred', fontweight='bold', fontsize=10)
-
-                # 3. Labels
-                if self.main.show_grid_labels.isChecked():
-                    for i, x in enumerate(gx):
-                        self.ax.text(x, gy[0] - 0.5, str(i+1), ha='center', va='top', color='black', fontweight='bold')
-                    for i, y in enumerate(gy):
-                        label = alphabet[i] if i < len(alphabet) else f"Z{i}"
-                        self.ax.text(gx[0] - 0.5, y, label, ha='right', va='center', color='black', fontweight='bold')
-                    
-                # Extract selected height and next height
-                try:
-                    current_idx = self.main.floor_selector.currentIndex()
-                    sel_text = self.main.floor_selector.currentText()
-                    sel_height = float(sel_text.split('(')[1].split('m')[0])
-                    
-                    if current_idx < self.main.floor_selector.count() - 1:
-                        next_text = self.main.floor_selector.itemText(current_idx + 1)
-                        next_height = float(next_text.split('(')[1].split('m')[0])
-                    else:
-                        next_height = None
-                except (IndexError, ValueError):
-                    sel_height = 0.0
-                    next_height = None
-
-                # 4. Draw Frames
-                for row in range(self.main.grid_table.rowCount()):
-                    line_item = self.main.grid_table.item(row, 0)
-                    offset_item = self.main.grid_table.item(row, 2)
-                    if not line_item or not offset_item: continue
-                    
-                    line_label = line_item.text().upper()
-                    frame_name = self.main.grid_table.cellWidget(row, 1).currentText()
-                    try:
-                        offset = float(offset_item.text())
-                    except ValueError: offset = 0.0
-                    
-                    if frame_name not in self.main.frames: continue
-                    f_model = self.main.frames[frame_name]
-                    f_ss = f_model.system
-                    if not f_ss.element_map: continue
-                    
-                    # Filter by height: show only frames that reach this height
-                    max_frame_y = max(n.vertex.y for n in f_ss.node_map.values())
-                    if max_frame_y < sel_height:
-                        continue
-                    
-                    # Find beams at this height for marking
-                    beams_at_h = []
-                    for eid, el in f_ss.element_map.items():
-                        n1 = f_ss.node_map[el.node_id1].vertex
-                        n2 = f_ss.node_map[el.node_id2].vertex
-                        if np.isclose(n1.y, sel_height) and np.isclose(n2.y, sel_height):
-                            beams_at_h.append(el)
-
-                    # Find columns starting at this height and going to next_height
-                    columns_at_h = []
-                    if next_height is not None:
-                        for eid, el in f_ss.element_map.items():
-                            n1 = f_ss.node_map[el.node_id1].vertex
-                            n2 = f_ss.node_map[el.node_id2].vertex
-                            h_coords = sorted([n1.y, n2.y])
-                            if np.isclose(h_coords[0], sel_height) and np.isclose(h_coords[1], next_height):
-                                if np.isclose(n1.x, n2.x):
-                                    columns_at_h.append(el)
-                    
-                    if line_label.isdigit(): # Vertical line (1, 2, 3...)
-                        idx = int(line_label) - 1
-                        if idx < len(gx):
-                            pos_x = gx[idx]
-                            
-                            # Plot beams
-                            for el in beams_at_h:
-                                n1 = f_ss.node_map[el.node_id1].vertex
-                                n2 = f_ss.node_map[el.node_id2].vertex
-                                self.ax.plot([pos_x, pos_x], [gy[0] + offset + n1.x, gy[0] + offset + n2.x], color='cyan', linewidth=3)
-                                
-                                if self.main.show_beam_marks.isChecked():
-                                    mid_x = (n1.x + n2.x) / 2.0
-                                    self.ax.text(pos_x + 0.2, gy[0] + offset + mid_x, f"B:{frame_name}-{el.id}", 
-                                                 color='blue', fontsize=8, fontweight='bold', va='center')
-                            
-                            # Plot columns and marks
-                            if self.main.show_beam_marks.isChecked():
-                                for el in columns_at_h:
-                                    n1 = f_ss.node_map[el.node_id1].vertex
-                                    pos_y = gy[0] + offset + n1.x
-                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
-                                    self.ax.text(pos_x - 0.2, pos_y, f"C:{frame_name}-{el.id}", 
-                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='right', va='center')
-
-                    else: # Horizontal line (A, B, C...)
-                        idx = alphabet.find(line_label)
-                        if idx != -1 and idx < len(gy):
-                            pos_y = gy[idx]
-
-                            # Plot beams
-                            for el in beams_at_h:
-                                n1 = f_ss.node_map[el.node_id1].vertex
-                                n2 = f_ss.node_map[el.node_id2].vertex
-                                self.ax.plot([gx[0] + offset + n1.x, gx[0] + offset + n2.x], [pos_y, pos_y], color='cyan', linewidth=3)
-                                
-                                if self.main.show_beam_marks.isChecked():
-                                    mid_x = (n1.x + n2.x) / 2.0
-                                    self.ax.text(gx[0] + offset + mid_x, pos_y + 0.2, f"B:{frame_name}-{el.id}", 
-                                                 color='blue', fontsize=8, fontweight='bold', ha='center')
-
-                            # Plot columns and marks
-                            if self.main.show_beam_marks.isChecked():
-                                for el in columns_at_h:
-                                    n1 = f_ss.node_map[el.node_id1].vertex
-                                    pos_x = gx[0] + offset + n1.x
-                                    self.ax.plot(pos_x, pos_y, 'o', color='darkcyan', markersize=6)
-                                    self.ax.text(pos_x, pos_y - 0.2, f"C:{frame_name}-{el.id}", 
-                                                 color='darkgreen', fontsize=8, fontweight='bold', ha='center', va='top')
-
-                self.ax.set_aspect('equal', adjustable='box')
-                self.ax.autoscale_view()
-
+            if mode == "Grid Plan":
+                self.plot_grid_plan()
             elif mode == "3D Wireframe":
-                self.ax.set_axis_on()
-                self.figure.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
-                alphabet = string.ascii_uppercase
-                
-                # 0. Configure Mouse Interaction
-                if hasattr(self.ax, '_rotate_btn'):
-                    if self.main.lock_3d_rotation.isChecked():
-                        self.ax._rotate_btn = None
-                        if hasattr(self.ax, '_pan_btn'):
-                            self.ax._pan_btn = 1 # Left click to pan
-                    else:
-                        self.ax._rotate_btn = 1 # Left click to rotate
-                        if hasattr(self.ax, '_pan_btn'):
-                            self.ax._pan_btn = 3 # Right click to pan
-
-                # 1. Parse spacings
-                try:
-                    sx = [float(s.strip()) for s in self.main.grid_x_input.text().split(',') if s.strip()]
-                    sy = [float(s.strip()) for s in self.main.grid_y_input.text().split(',') if s.strip()]
-                except ValueError:
-                    sx, sy = [], []
-                gx = [0.0] + list(np.cumsum(sx))
-                gy = [0.0] + list(np.cumsum(sy))
-
-                # Parse Z elevations
-                gz = []
-                z_labels = []
-                for row in range(self.main.grid_z_table.rowCount()):
-                    try:
-                        name_item = self.main.grid_z_table.item(row, 0)
-                        elev_item = self.main.grid_z_table.item(row, 1)
-                        if name_item and elev_item:
-                            gz.append(float(elev_item.text()))
-                            z_labels.append(name_item.text())
-                    except (ValueError, AttributeError): continue
-
-                # 2. Draw Frames
-                for row in range(self.main.grid_table.rowCount()):
-                    line_item = self.main.grid_table.item(row, 0)
-                    offset_item = self.main.grid_table.item(row, 2)
-                    if not line_item or not offset_item: continue
-                    
-                    line_label = line_item.text().upper()
-                    frame_name = self.main.grid_table.cellWidget(row, 1).currentText()
-                    try: offset = float(offset_item.text())
-                    except ValueError: offset = 0.0
-                    
-                    if frame_name not in self.main.frames: continue
-                    f_ss = self.main.frames[frame_name].system
-                    if not f_ss.element_map: continue
-                    
-                    for el in f_ss.element_map.values():
-                        n1 = f_ss.node_map[el.node_id1].vertex
-                        n2 = f_ss.node_map[el.node_id2].vertex
-                        
-                        if line_label.isdigit(): # Vertical line
-                            idx = int(line_label) - 1
-                            if idx < len(gx):
-                                pos_x = gx[idx]
-                                self.ax.plot([pos_x, pos_x], 
-                                             [gy[0] + offset + n1.x, gy[0] + offset + n2.x], 
-                                             [n1.y, n2.y], color='steelblue', linewidth=1.5)
-                        else: # Horizontal line
-                            idx = alphabet.find(line_label)
-                            if idx != -1 and idx < len(gy):
-                                pos_y = gy[idx]
-                                self.ax.plot([gx[0] + offset + n1.x, gx[0] + offset + n2.x], 
-                                             [pos_y, pos_y], 
-                                             [n1.y, n2.y], color='steelblue', linewidth=1.5)
-
-                # 3. Ticks and Labels
-                if self.main.show_ticks.isChecked():
-                    self.ax.set_xticks(gx)
-                    self.ax.set_yticks(gy)
-                    self.ax.set_zticks(gz)
-                    
-                    if self.main.show_grid_labels.isChecked():
-                        self.ax.set_xticklabels([str(i+1) for i in range(len(gx))])
-                        y_labels = [alphabet[i] if i < 26 else f"Z{i}" for i in range(len(gy))]
-                        self.ax.set_yticklabels(y_labels)
-                        self.ax.set_zticklabels(z_labels)
-                    else:
-                        self.ax.set_xticklabels([])
-                        self.ax.set_yticklabels([])
-                        self.ax.set_zticklabels([])
-                else:
-                    self.ax.set_xticks([])
-                    self.ax.set_yticks([])
-                    self.ax.set_zticks([])
-
-                self.ax.set_xlabel('X (m)' if self.main.show_grid_labels.isChecked() else '')
-                self.ax.set_ylabel('Y (m)' if self.main.show_grid_labels.isChecked() else '')
-                self.ax.set_zlabel('Elevation (m)' if self.main.show_grid_labels.isChecked() else '')
-                
-                self.ax.grid(self.main.show_grid.isChecked())
-                if not self.view_xlim: # Only set initial view if not already set
-                    self.ax.view_init(elev=20, azim=-35)
-
+                self.plot_3d_wireframe()
+            elif mode == "Member Analysis":
+                self.plot_member_analysis()
+            else: # Standard anastruct plots
+                self.plot_anastruct_results(mode)
         except Exception as e:
-            print(f"Plotting error: {type(e).__name__}: {e}")
-            # Fallback to structure view and update UI if results aren't available
-            if mode != "Structure":
-                self.main.view_mode.blockSignals(True) 
-                self.main.view_mode.setCurrentText("Structure")
-                self.main.view_mode.blockSignals(False)
-                try:
-                    prepare_plotter()
-                    self.main.ss.plotter.plot_structure(
-                        figsize=current_figsize, verbosity=0, show=False, gridplot=True, annotations=False
-                    )
-                except Exception:
-                    pass
-        
-        # Apply grid and tick settings
-        if mode not in ["Grid Plan", "3D Wireframe"]:
-            # Control axis visibility (ticks, labels, spines)
-            self.ax.set_axis_on() if self.main.show_ticks.isChecked() else self.ax.set_axis_off()
-            # Control grid visibility independently
-            self.ax.grid(self.main.show_grid.isChecked())
-            self.figure.subplots_adjust(left=0.07, right=0.97, top=0.95, bottom=0.07)
-
-        # Ensure aspect ratio is handled correctly to avoid console warnings
-        if self.ax.name != '3d':
-            self.ax.set_aspect('equal', adjustable='box')
+            print(f"Plotting error in mode '{mode}': {type(e).__name__}: {e}")
+            traceback.print_exc()
+            self.ax.text(0.5, 0.5, f"Error plotting '{mode}'", ha='center', va='center', color='red')
 
         # Restore view state
         if self.view_xlim and self.ax.name != '3d':
             self.ax.set_xlim(self.view_xlim)
             self.ax.set_ylim(self.view_ylim)
-
-        # Refresh the canvas
+            
         self.canvas.draw()
+
+    def plot_grid_plan(self):
+        """Custom drawing for the pre-analysis top-down grid view."""
+        self.ax.set_axis_off()
+        self.figure.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        alphabet = string.ascii_uppercase
+
+        # 1. Parse grid spacings from UI
+        try:
+            sx = [float(s.strip()) for s in self.main.grid_x_input.text().split(',') if s.strip()]
+            sy = [float(s.strip()) for s in self.main.grid_y_input.text().split(',') if s.strip()]
+            gx = [0.0] + list(np.cumsum(sx))
+            gy = [0.0] + list(np.cumsum(sy))
+        except ValueError:
+            self.ax.text(0.5, 0.5, "Invalid Grid Spacing", ha='center', va='center', color='red')
+            return
+
+        # 2. Parse Z-levels from UI
+        try:
+            z_levels = sorted([float(self.main.grid_z_table.item(r, 1).text()) for r in range(self.main.grid_z_table.rowCount())])
+            min_z = z_levels[0] if z_levels else 0.0
+            sel_text = self.main.floor_selector.currentText()
+            sel_height = float(sel_text.split('(')[1].split('m')[0])
+        except (ValueError, AttributeError, IndexError):
+            min_z, sel_height = 0.0, 0.0
+
+        # 3. Draw Grid Lines and Labels
+        if self.main.show_grid.isChecked():
+            for x in gx: self.ax.axvline(x, color='gray', linestyle='--', linewidth=1.0)
+            for y in gy: self.ax.axhline(y, color='gray', linestyle='--', linewidth=1.0)
+        
+        if self.main.show_grid_labels.isChecked():
+            for i, x in enumerate(gx): self.ax.text(x, gy[0] - 0.5, str(i+1), ha='center', va='top', color='black', fontweight='bold')
+            for i, y in enumerate(gy): self.ax.text(gx[0] - 0.5, gy[i], alphabet[i], ha='right', va='center', color='black', fontweight='bold')
+
+        # 4. Draw Slabs (using the self.main.building model populated by the GUI)
+        for name, data in self.main.building.slabs.items():
+            if not np.isclose(data.get('level', -1), sel_height): continue
+            
+            pts = []
+            for x_idx, y_idx in data.get('points', []):
+                if x_idx < len(gx) and y_idx < len(gy):
+                    pts.append([gx[x_idx], gy[y_idx]])
+            if pts:
+                poly = plt.Polygon(pts, closed=True, facecolor='orange', alpha=0.3, edgecolor='darkorange', linewidth=1)
+                self.ax.add_patch(poly)
+                cx, cy = np.mean([p[0] for p in pts]), np.mean([p[1] for p in pts])
+                self.ax.text(cx, cy, name, ha='center', va='center', color='darkred', fontsize=9)
+
+        # 5. Draw Frames
+        template_h = sel_height - min_z
+        for row in range(self.main.grid_table.rowCount()):
+            try:
+                line_label = self.main.grid_table.item(row, 0).text().upper()
+                frame_name = self.main.grid_table.cellWidget(row, 1).currentText()
+                offset = float(self.main.grid_table.item(row, 2).text())
+                
+                f_model = self.main.frame_templates.get(frame_name)
+                if not f_model or not f_model.system.element_map: continue
+
+                # Find beams in the template at the correct relative height
+                for el in f_model.system.element_map.values():
+                    n1 = f_model.system.node_map[el.node_id1].vertex
+                    n2 = f_model.system.node_map[el.node_id2].vertex
+                    
+                    if np.isclose(n1.y, template_h) and np.isclose(n2.y, template_h):
+                        # This is a beam at the correct level, now plot it
+                        if line_label.isdigit(): # Vertical grid line
+                            idx = int(line_label) - 1
+                            if idx < len(gx):
+                                pos_x = gx[idx]
+                                # Frame's local X is along global Y
+                                self.ax.plot([pos_x, pos_x], [n1.x + offset, n2.x + offset], color='steelblue', linewidth=2.5)
+                        else: # Horizontal grid line
+                            idx = alphabet.find(line_label)
+                            if idx != -1 and idx < len(gy):
+                                pos_y = gy[idx]
+                                # Frame's local X is along global X
+                                self.ax.plot([n1.x + offset, n2.x + offset], [pos_y, pos_y], color='steelblue', linewidth=2.5)
+            except (ValueError, AttributeError, IndexError):
+                continue # Skip invalid rows
+
+        self.ax.set_aspect('equal', adjustable='box')
+        self.ax.autoscale_view()
+
+    def plot_3d_wireframe(self):
+        """Plots the solved 3D model from the GridManager."""
+        self.ax.set_axis_on()
+        self.figure.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.05)
+        
+        if not self.main.manager:
+            self.ax.text(0.5, 0.5, 0.5, "Run analysis to view 3D model", ha='center', va='center', transform=self.ax.transAxes)
+            return
+
+        gx, gy, gz = self.main.manager.grid['x'], self.main.manager.grid['y'], self.main.manager.grid['z']
+        
+        # Draw all elements from all solved frames
+        all_frames = list(self.main.manager.xz_frames.items()) + list(self.main.manager.yz_frames.items())
+        for coord, ss in all_frames:
+            if not ss.element_map: continue
+            is_xz = coord in gy
+
+            for el in ss.element_map.values():
+                n1, n2 = ss.node_map[el.node_id1].vertex, ss.node_map[el.node_id2].vertex
+                if is_xz: # XZ frame at Y=coord
+                    self.ax.plot([n1.x, n2.x], [coord, coord], [n1.y, n2.y], color='steelblue', linewidth=1.5)
+                else: # YZ frame at X=coord
+                    self.ax.plot([coord, coord], [n1.x, n2.x], [n1.y, n2.y], color='steelblue', linewidth=1.5)
+
+        # Ticks and Labels
+        if self.main.show_ticks.isChecked():
+            self.ax.set_xticks(gx); self.ax.set_yticks(gy); self.ax.set_zticks(gz)
+        self.ax.set_xlabel('X'); self.ax.set_ylabel('Y'); self.ax.set_zlabel('Z')
+        self.ax.grid(self.main.show_grid.isChecked())
+        if not self.view_xlim: self.ax.view_init(elev=20, azim=-35)
+
+    def plot_anastruct_results(self, mode):
+        """Calls the standard anastruct plotting functions."""
+        if not self.main.ss or not self.main.ss.element_map:
+            self.ax.text(0.5, 0.5, "No system loaded or system is empty.", ha='center', va='center')
+            return
+
+        # Ensure anastruct uses our existing axes
+        self.main.ss.plotter.axes = [self.ax]
+        self.main.ss.plotter.fig = self.figure
+        
+        scale = self.main.scale_slider.value()
+        
+        plot_map = {
+            "Structure": self.main.ss.show_structure,
+            "Displacement": self.main.ss.show_displacement,
+            "Axial Force": self.main.ss.show_axial_force,
+            "Shear Force": self.main.ss.show_shear_force,
+            "Bending Moment": self.main.ss.show_bending_moment,
+        }
+        
+        plot_func = plot_map.get(mode)
+        if plot_func:
+            kwargs = {'show': False, 'verbosity': 0}
+            # Special handling for different method signatures in anastruct
+            if mode == "Displacement":
+                kwargs['factor'] = scale
+            # For all plot types, we can pass figsize. For older anastruct versions,
+            # this is critical for show_structure(), which had it as a required argument.
+            kwargs['figsize'] = self.main.ss.figsize
+            plot_func(**kwargs)
+            self.ax.set_title(mode, color='black')
+
+    def plot_member_analysis(self):
+        # This can be implemented later if needed
+        self.ax.text(0.5, 0.5, "Member Analysis not yet implemented.", ha='center', va='center')
 
     def on_scroll(self, event):
         if event.inaxes != self.ax: return
-        if self.ax.name == '3d':
-            # 3D Zoom logic
-            scale_factor = 0.9 if event.button == 'up' else 1.1
-            cur_xlim = self.ax.get_xlim()
-            cur_ylim = self.ax.get_ylim()
-            cur_zlim = self.ax.get_zlim()
-            def scale_lim(lim, factor):
-                mid = (lim[0] + lim[1]) / 2
-                half_range = (lim[1] - lim[0]) / 2 * factor
-                return [mid - half_range, mid + half_range]
-            self.ax.set_xlim(scale_lim(cur_xlim, scale_factor))
-            self.ax.set_ylim(scale_lim(cur_ylim, scale_factor))
-            self.ax.set_zlim(scale_lim(cur_zlim, scale_factor))
-            self.canvas.draw_idle()
-            return
-        self.ax.set_aspect('equal', adjustable='box')
-        base_scale = 1.2
-        scale_factor = 1 / base_scale if event.button == 'up' else base_scale
-        x_min, x_max = self.ax.get_xlim(); y_min, y_max = self.ax.get_ylim()
-        new_width, new_height = (x_max - x_min) * scale_factor, (y_max - y_min) * scale_factor
-        rel_x, rel_y = (event.xdata - x_min) / (x_max - x_min), (event.ydata - y_min) / (y_max - y_min)
-        self.view_xlim = [event.xdata - rel_x * new_width, event.xdata + (1 - rel_x) * new_width]
-        self.view_ylim = [event.ydata - rel_y * new_height, event.ydata + (1 - rel_y) * new_height]
-        self.ax.set_xlim(self.view_xlim); self.ax.set_ylim(self.view_ylim)
+        # Simplified zoom logic
+        scale_factor = 1.1 if event.button == 'up' else 1 / 1.1
+        cur_xlim = self.ax.get_xlim(); cur_ylim = self.ax.get_ylim()
+        self.ax.set_xlim([c - (c - event.xdata) * scale_factor for c in cur_xlim])
+        self.ax.set_ylim([c - (c - event.ydata) * scale_factor for c in cur_ylim])
         self.canvas.draw_idle()
 
     def on_press(self, event):
-        if event.button == 2 and self.ax.name != '3d': 
-            self.ax.set_aspect('equal', adjustable='box')
-            self.press = event.x, event.y, self.ax.get_xlim(), self.ax.get_ylim()
+        if event.button == 2: self.press = event.xdata, event.ydata, self.ax.get_xlim(), self.ax.get_ylim()
 
     def on_release(self, event): self.press = None
 
     def on_motion(self, event):
-        if self.press is None or event.inaxes != self.ax or event.x is None or event.y is None or self.ax.name == '3d': return
-        start_x, start_y, x_lim, y_lim = self.press
-        
-        dx_pix = event.x - start_x
-        dy_pix = event.y - start_y
-        
-        width_pix = self.ax.bbox.width
-        height_pix = self.ax.bbox.height
-        
-        dx_data = dx_pix * (x_lim[1] - x_lim[0]) / width_pix
-        dy_data = dy_pix * (y_lim[1] - y_lim[0]) / height_pix
-        
-        self.view_xlim = [x_lim[0] - dx_data, x_lim[1] - dx_data]
-        self.view_ylim = [y_lim[0] - dy_data, y_lim[1] - dy_data]
-        self.ax.set_xlim(self.view_xlim); self.ax.set_ylim(self.view_ylim)
+        if self.press is None or event.inaxes != self.ax: return
+        xpress, ypress, xlim, ylim = self.press
+        dx = event.xdata - xpress; dy = event.ydata - ypress
+        self.ax.set_xlim(xlim[0] - dx, xlim[1] - dx)
+        self.ax.set_ylim(ylim[0] - dy, ylim[1] - dy)
         self.canvas.draw_idle()
 
     def reset_view(self):

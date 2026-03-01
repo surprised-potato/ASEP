@@ -25,4 +25,5 @@ class BuildingModel:
         self.grid_y = []  # List of floats (spacings)
         self.levels = []  # List of dicts: {'name': str, 'elevation': float}
         self.assignments = [] # List of dicts: {'line': str, 'frame': str, 'offset': float}
-        self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float}}
+        self.slabs = {} # {name: {'points': [(x_idx, y_idx), ...], 'load': float, 'level_height': float}}
+        self.consolidated_results = {} # {(x_idx, y_idx, level_idx): {'N': float, 'Mx': float, 'My': float, ...}}

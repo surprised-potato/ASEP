@@ -173,8 +173,8 @@ class StructuralApp(QMainWindow):
         
         slabs_group = QGroupBox("Manage Slabs")
         slabs_vbox = QVBoxLayout()
-        self.slabs_table = QTableWidget(0, 3)
-        self.slabs_table.setHorizontalHeaderLabels(["Name", "Points (e.g. A1,A2,B2,B1)", "Pressure (kN/m2)"])
+        self.slabs_table = QTableWidget(0, 4)
+        self.slabs_table.setHorizontalHeaderLabels(["Name", "Points (e.g. A1,A2,B2,B1)", "Pressure (kN/m2)", "Level (m)"])
         self.slabs_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.slabs_table.itemChanged.connect(self.on_slab_data_changed)
         slabs_vbox.addWidget(self.slabs_table)
@@ -441,6 +441,12 @@ class StructuralApp(QMainWindow):
         # --- SECTION 6: TEST ---
         test_tab = QWidget()
         test_layout = QVBoxLayout(test_tab)
+        
+        self.test_foundation_type = QComboBox()
+        self.test_foundation_type.addItems(["Fixed", "Hinged", "Spring"])
+        test_layout.addWidget(QLabel("Test Foundation Type:"))
+        test_layout.addWidget(self.test_foundation_type)
+        
         gen_building_btn = QPushButton("Generate 3-Story Building (3x4 Grid)")
         gen_building_btn.clicked.connect(self.generate_test_building)
         test_layout.addWidget(gen_building_btn)
@@ -450,67 +456,54 @@ class StructuralApp(QMainWindow):
         sidebar_scroll.setWidget(sidebar_widget)
         layout.addWidget(sidebar_scroll)
 
-        # --- CENTRAL CANVAS (Visualization) ---
-        viz_layout = QVBoxLayout()
-        # Create figure managed by pyplot
+        # --- CENTRAL AREA (Visualization & Results) ---
+        central_container = QWidget()
+        central_layout = QVBoxLayout(central_container)
+        self.central_stack = QStackedWidget()
+        
         self.figure, self.ax = plt.subplots()
         self.ax.set_aspect('equal', adjustable='box')
         self.figure.subplots_adjust(left=0.07, right=0.97, top=0.95, bottom=0.07)
-        # Use the canvas that pyplot created to maintain the manager link
         self.canvas = self.figure.canvas
         self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        viz_layout.addWidget(self.canvas, stretch=1)
         
-        # Initialize Plotter
-        self.plotter = StructuralPlotter(self)
+        # 1. Visualization View (Canvas only)
+        self.central_stack.addWidget(self.canvas)
         
-        # Connect signals that were deferred until plotter creation
-        self.grid_z_table.itemChanged.connect(self.plotter.update_plot)
-        self.grid_x_input.textChanged.connect(self.plotter.update_plot)
-        self.grid_y_input.textChanged.connect(self.plotter.update_plot)
-        self.grid_table.itemChanged.connect(self.plotter.update_plot)
-
-        # --- VISUALIZATION TOOLBAR (Below Plot) ---
+        # Visualization Toolbar
         viz_toolbar = QHBoxLayout()
         
         self.view_mode = QComboBox()
-        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan", "3D Wireframe"])
-        self.view_mode.currentTextChanged.connect(self.plotter.update_plot)
+        self.view_mode.addItems(["Structure", "Displacement", "Axial Force", "Shear Force", "Bending Moment", "Grid Plan", "3D Wireframe", "Member Analysis", "Results Table"])
+        self.view_mode.currentTextChanged.connect(self.on_view_mode_changed)
+        
+        self.member_selector = QComboBox()
+        self.member_selector.setVisible(False)
         
         self.floor_selector = QComboBox()
         self.floor_selector.setEnabled(False)
-        self.floor_selector.currentTextChanged.connect(self.plotter.update_plot)
         
         self.scale_slider = QSlider(Qt.Orientation.Horizontal)
         self.scale_slider.setRange(1, 100)
         self.scale_slider.setValue(10)
         self.scale_slider.setFixedWidth(150)
-        self.scale_slider.valueChanged.connect(self.plotter.update_plot)
 
         self.show_grid = QCheckBox("Grid")
         self.show_grid.setChecked(True)
-        self.show_grid.stateChanged.connect(self.plotter.update_plot)
-
         self.show_ticks = QCheckBox("Ticks")
         self.show_ticks.setChecked(True)
-        self.show_ticks.stateChanged.connect(self.plotter.update_plot)
-
         self.show_grid_labels = QCheckBox("Grid Labels")
         self.show_grid_labels.setChecked(True)
-        self.show_grid_labels.stateChanged.connect(self.plotter.update_plot)
-
         self.show_beam_marks = QCheckBox("Beam Marks")
-        self.show_beam_marks.stateChanged.connect(self.plotter.update_plot)
-
         self.lock_3d_rotation = QCheckBox("Lock 3D Rotation")
         self.lock_3d_rotation.setEnabled(False)
-        self.lock_3d_rotation.stateChanged.connect(self.plotter.update_plot)
 
         reset_view_btn = QPushButton("Fit View")
-        reset_view_btn.clicked.connect(self.plotter.reset_view)
 
         viz_toolbar.addWidget(QLabel("View:"))
         viz_toolbar.addWidget(self.view_mode)
+        viz_toolbar.addWidget(QLabel("Member:"))
+        viz_toolbar.addWidget(self.member_selector)
         viz_toolbar.addWidget(QLabel("Floor:"))
         viz_toolbar.addWidget(self.floor_selector)
         viz_toolbar.addWidget(QLabel("Scale:"))
@@ -522,10 +515,38 @@ class StructuralApp(QMainWindow):
         viz_toolbar.addWidget(self.lock_3d_rotation)
         viz_toolbar.addWidget(reset_view_btn)
         viz_toolbar.addStretch()
-        
-        viz_layout.addLayout(viz_toolbar)
 
-        layout.addLayout(viz_layout, stretch=1)
+        central_layout.addWidget(self.central_stack, stretch=1)
+        central_layout.addLayout(viz_toolbar)
+
+        # 2. Results Table View
+        self.results_table_container = QScrollArea()
+        self.results_table_container.setWidgetResizable(True)
+        self.results_table_widget = QWidget()
+        self.results_table_layout = QVBoxLayout(self.results_table_widget)
+        self.results_table_container.setWidget(self.results_table_widget)
+        self.central_stack.addWidget(self.results_table_container)
+
+        layout.addWidget(central_container, stretch=1)
+        
+        # Initialize Plotter
+        self.plotter = StructuralPlotter(self)
+        
+        # Connect signals
+        self.grid_z_table.itemChanged.connect(lambda: self.update_floor_levels())
+        self.grid_x_input.textChanged.connect(lambda: (self.validate_grid_assignments(), self.plotter.update_plot()))
+        self.grid_y_input.textChanged.connect(lambda: (self.validate_grid_assignments(), self.plotter.update_plot()))
+        self.grid_table.itemChanged.connect(lambda: (self.validate_grid_assignments(), self.plotter.update_plot()))
+        
+        self.floor_selector.currentTextChanged.connect(self.plotter.update_plot)
+        self.scale_slider.valueChanged.connect(self.plotter.update_plot)
+        self.show_grid.stateChanged.connect(self.plotter.update_plot)
+        self.show_ticks.stateChanged.connect(self.plotter.update_plot)
+        self.show_grid_labels.stateChanged.connect(self.plotter.update_plot)
+        self.show_beam_marks.stateChanged.connect(self.plotter.update_plot)
+        self.lock_3d_rotation.stateChanged.connect(self.plotter.update_plot)
+        self.member_selector.currentTextChanged.connect(self.plotter.update_plot)
+        reset_view_btn.clicked.connect(self.plotter.reset_view)
 
         # Trigger initial visibility state after all UI components are initialized
         self.on_sidebar_changed(self.sidebar_selector.currentText())
@@ -637,9 +658,16 @@ class StructuralApp(QMainWindow):
         self.slabs = {}
         for row in range(self.slabs_table.rowCount()):
             try:
-                name = self.slabs_table.item(row, 0).text()
-                pts_str = self.slabs_table.item(row, 1).text()
-                load = float(self.slabs_table.item(row, 2).text())
+                name_item = self.slabs_table.item(row, 0)
+                pts_item = self.slabs_table.item(row, 1)
+                load_item = self.slabs_table.item(row, 2)
+                level_item = self.slabs_table.item(row, 3)
+                if not all([name_item, pts_item, load_item, level_item]): continue
+                
+                name = name_item.text()
+                pts_str = pts_item.text()
+                load = float(load_item.text())
+                level_h = float(level_item.text())
                 
                 pts = []
                 for p_str in pts_str.split(','):
@@ -647,7 +675,7 @@ class StructuralApp(QMainWindow):
                     if parsed: pts.append(parsed)
                 
                 if pts:
-                    self.slabs[name] = {'points': pts, 'load': load}
+                    self.slabs[name] = {'points': pts, 'load': load, 'level_height': level_h}
             except (ValueError, AttributeError): continue
         self.plotter.update_plot()
 
@@ -693,6 +721,11 @@ class StructuralApp(QMainWindow):
         for name, data in self.slabs.items():
             pts = data['points']
             w = data['load']
+            slab_h = data.get('level_height')
+            
+            # Only process slabs on the selected level
+            if slab_h is not None and not np.isclose(slab_h, sel_height):
+                continue
             
             # Detect if rectangular (simple case)
             x_indices = sorted(list(set(p[0] for p in pts)))
@@ -729,26 +762,37 @@ class StructuralApp(QMainWindow):
                     f_start = start - (gx[0] if not is_vert else gy[0]) - offset
                     f_end = end - (gx[0] if not is_vert else gy[0]) - offset
                     
-                    target_eid = None
+                    target_elements = []
                     for eid, el in f_ss.element_map.items():
                         n1, n2 = f_ss.node_map[el.node_id1].vertex, f_ss.node_map[el.node_id2].vertex
                         if np.isclose(n1.y, sel_height) and np.isclose(n2.y, sel_height):
-                            coords = sorted([n1.x, n2.x])
-                            if np.isclose(coords[0], f_start) and np.isclose(coords[1], f_end):
-                                target_eid = eid; break
+                            c1, c2 = sorted([n1.x, n2.x])
+                            if c1 >= f_start - 1e-6 and c2 <= f_end + 1e-6 and not np.isclose(c1, c2):
+                                target_elements.append(el)
                     
-                    if target_eid is None: continue
+                    if not target_elements: continue
                     
-                    # Apply load
-                    edge_len = end - start
-                    if np.isclose(edge_len, short_dim):
-                        # Triangular load
-                        self.apply_specialized_load(fname, target_eid, "Triangular (Peak Mid)", peak, 0.5)
+                    # If it's a single element matching the full edge, use specialized split logic
+                    if len(target_elements) == 1:
+                        el = target_elements[0]
+                        edge_len = f_end - f_start
+                        if np.isclose(edge_len, short_dim):
+                            self.apply_specialized_load(fname, el.id, "Triangular (Peak Mid)", peak, 0.5)
+                        else:
+                            pos1 = (short_dim / 2.0) / edge_len
+                            pos2 = 1.0 - pos1
+                            self.apply_specialized_load(fname, el.id, "Trapezoidal (Uniform Mid)", peak, pos1, pos2)
                     else:
-                        # Trapezoidal load
-                        pos1 = (short_dim / 2.0) / edge_len
-                        pos2 = 1.0 - pos1
-                        self.apply_specialized_load(fname, target_eid, "Trapezoidal (Uniform Mid)", peak, pos1, pos2)
+                        # Multiple segments: apply uniform load to each as a simplified fallback
+                        model = self.frames[fname]
+                        for el in target_elements:
+                            # Find index in blueprint by matching coordinates
+                            n1, n2 = f_ss.node_map[el.node_id1].vertex, f_ss.node_map[el.node_id2].vertex
+                            for i, e in enumerate(model.elements):
+                                if (np.allclose(e['loc'][0], [n1.x, n1.y]) and np.allclose(e['loc'][1], [n2.x, n2.y])) or \
+                                   (np.allclose(e['loc'][1], [n1.x, n1.y]) and np.allclose(e['loc'][0], [n2.x, n2.y])):
+                                    model.q_loads.append({'element_idx': i, 'q': -abs(peak), 'dir': 'y', 'qp': 0})
+                                    break
             else:
                 # Irregular slab: Fallback or simplified distribution could be added here
                 pass
@@ -758,18 +802,30 @@ class StructuralApp(QMainWindow):
 
     def apply_specialized_load(self, frame_name, eid, ltype, peak, pos1, pos2=0.75):
         """Helper to apply split-element loads to a specific frame."""
+        peak = -abs(peak) # Ensure downward load for slab distribution
         model = self.frames[frame_name]
-        idx = eid - 1
-        if idx < 0 or idx >= len(model.elements): return
+        ss = model.system
+        el = ss.element_map.get(eid)
+        if not el: return
+        n1_v, n2_v = ss.node_map[el.node_id1].vertex, ss.node_map[el.node_id2].vertex
+
+        # Find element in blueprint by matching coordinates
+        target_idx = -1
+        for i, e in enumerate(model.elements):
+            if (np.allclose(e['loc'][0], [n1_v.x, n1_v.y]) and np.allclose(e['loc'][1], [n2_v.x, n2_v.y])) or \
+               (np.allclose(e['loc'][1], [n1_v.x, n1_v.y]) and np.allclose(e['loc'][0], [n2_v.x, n2_v.y])):
+                target_idx = i
+                break
         
-        el_data = model.elements[idx]
+        if target_idx == -1: return
+        
+        el_data = model.elements.pop(target_idx)
         n1_loc, n2_loc = el_data['loc']
         ea, ei = el_data['EA'], el_data['EI']
         
-        model.elements.pop(idx)
-        model.q_loads = [q for q in model.q_loads if q['element_idx'] != idx]
+        model.q_loads = [q for q in model.q_loads if q['element_idx'] != target_idx]
         for q in model.q_loads:
-            if q['element_idx'] > idx: q['element_idx'] -= 1
+            if q['element_idx'] > target_idx: q['element_idx'] -= 1
 
         if ltype == "Triangular (Peak Mid)":
             mid = [float(n1_loc[0] + (n2_loc[0] - n1_loc[0]) * pos1), float(n1_loc[1] + (n2_loc[1] - n1_loc[1]) * pos1)]
@@ -817,6 +873,7 @@ class StructuralApp(QMainWindow):
 
         # Rebuild the system to ensure all internal state is fresh
         self.rebuild_system()
+        self.update_member_selector()
 
         # Sync Element Manager if active
         if hasattr(self, 'element_mgr_widget') and self.sidebar_selector.currentText() == "Element Manager":
@@ -1096,7 +1153,8 @@ class StructuralApp(QMainWindow):
                     
                     # Foundation supports at the very bottom (Footing level)
                     if i == 0:
-                        model.supports.append({'loc': [x, y_bot], 'type': sup_type, 'args': {}})
+                        args = {'k': float(self.k_input.text())} if sup_type == 'spring' else {}
+                        model.supports.append({'loc': [x, y_bot], 'type': sup_type, 'args': args})
                 
                 # Beams at y_top (Ground Floor or Floor levels)
                 q = q_vals[i] if i < len(q_vals) else q_vals[-1]
@@ -1249,6 +1307,8 @@ class StructuralApp(QMainWindow):
             if eid in self.ss.element_map:
                 self.ss.q_load(q=clean_val(q['q']), element_id=eid, direction=q['dir'], q_perp=clean_val(q.get('qp')))
 
+        self.update_member_selector()
+
         if self.view_mode.currentText() == "Structure":
             self.plotter.update_plot()
         else:
@@ -1291,19 +1351,28 @@ class StructuralApp(QMainWindow):
         try:
             nid = int(self.support_node_id.text())
             stype = self.support_type.currentText()
-            if stype == "Hinged":
-                self.ss.add_support_hinged(node_id=nid)
-            elif stype == "Fixed":
-                self.ss.add_support_fixed(node_id=nid)
-            elif stype == "Roll":
-                self.ss.add_support_roll(node_id=nid, direction=2)
-            elif stype == "Spring":
-                self.ss.add_support_spring(node_id=nid, translation=2, k=float(self.k_input.text()))
-            self.sync_blueprint_from_system(self.ss, self.frames[self.current_frame_name])
+            model = self.frames[self.current_frame_name]
+            node = model.system.node_map.get(nid)
+            if not node: raise ValueError("Node ID not found.")
+            
+            # Remove existing support at this location in blueprint
+            model.supports = [s for s in model.supports if not np.allclose(s['loc'], [node.vertex.x, node.vertex.y])]
+            
+            # Add new support to blueprint
+            args = {}
+            if stype == "Roll": args['direction'] = 2
+            elif stype == "Spring": args = {'translation': 2, 'k': float(self.k_input.text()), 'roll': False}
+            
+            model.supports.append({
+                'loc': [node.vertex.x, node.vertex.y],
+                'type': stype.lower(),
+                'args': args
+            })
+            
             self.rebuild_system()
             self.element_mgr_widget.refresh_data()
         except Exception as e:
-            QMessageBox.warning(self, "Input Error", "Ensure Node ID exists.")
+            QMessageBox.warning(self, "Input Error", str(e))
 
     def update_support_ui(self, text):
         self.k_input.setEnabled(text == "Spring")
@@ -1393,14 +1462,22 @@ class StructuralApp(QMainWindow):
         try:
             ltype = self.load_type.currentText()
             oid = int(self.load_id_input.text())
+            model = self.frames[self.current_frame_name]
+            ss = model.system
             
             if ltype == "Point Load":
                 val1 = float(self.load_val1.text())
                 val2 = float(self.load_val2.text())
-                self.ss.point_load(node_id=oid, Fx=val1, Fz=val2)
+                node = ss.node_map.get(oid)
+                if not node: raise ValueError("Node ID not found.")
+                model.point_loads.append({'loc': [node.vertex.x, node.vertex.y], 'Fx': val1, 'Fz': val2})
+                
             elif ltype == "Moment":
                 val1 = float(self.load_val1.text())
-                self.ss.moment_load(node_id=oid, Ty=val1)
+                node = ss.node_map.get(oid)
+                if not node: raise ValueError("Node ID not found.")
+                model.moment_loads.append({'loc': [node.vertex.x, node.vertex.y], 'Ty': val1})
+                
             elif ltype == "q-Load":
                 q_start = float(self.load_val1.text())
                 q_end = float(self.load_val1_end.text())
@@ -1411,27 +1488,36 @@ class StructuralApp(QMainWindow):
                 qp_val = qp_start if qp_start == qp_end else [qp_start, qp_end]
 
                 direction = self.load_dir.currentText()
-                self.ss.q_load(q=q_val, element_id=oid, direction=direction, q_perp=qp_val)
+                if oid not in ss.element_map: raise ValueError("Element ID not found.")
+                model.q_loads.append({'element_idx': oid - 1, 'q': q_val, 'dir': direction, 'qp': qp_val})
+                
             elif ltype in ["Triangular (Peak Mid)", "Trapezoidal (Uniform Mid)"]:
                 peak = float(self.load_val1.text())
                 direction = self.load_dir.currentText()
-                model = self.frames[self.current_frame_name]
-                ss = model.system
+                if direction == 'y': peak = -abs(peak) # Downward
+                
                 el = ss.element_map.get(oid)
                 if not el:
                     raise ValueError(f"Element {oid} not found.")
                 
-                self.sync_blueprint_from_system(ss, model)
+                # Note: specialized loads already modify blueprint and rebuild
                 n1 = ss.node_map[el.node_id1].vertex
                 n2 = ss.node_map[el.node_id2].vertex
                 ea, ei = el.EA, el.EI
                 
-                idx = oid - 1
-                if 0 <= idx < len(model.elements):
-                    model.elements.pop(idx)
-                    model.q_loads = [q for q in model.q_loads if q['element_idx'] != idx]
+                # Find element in blueprint by matching coordinates
+                target_idx = -1
+                for i, e in enumerate(model.elements):
+                    if (np.allclose(e['loc'][0], [n1.x, n1.y]) and np.allclose(e['loc'][1], [n2.x, n2.y])) or \
+                       (np.allclose(e['loc'][1], [n1.x, n1.y]) and np.allclose(e['loc'][0], [n2.x, n2.y])):
+                        target_idx = i
+                        break
+                
+                if target_idx != -1:
+                    model.elements.pop(target_idx)
+                    model.q_loads = [q for q in model.q_loads if q['element_idx'] != target_idx]
                     for q in model.q_loads:
-                        if q['element_idx'] > idx: q['element_idx'] -= 1
+                        if q['element_idx'] > target_idx: q['element_idx'] -= 1
                 
                 if ltype == "Triangular (Peak Mid)":
                     pos = float(self.load_pos1.text())
@@ -1458,9 +1544,6 @@ class StructuralApp(QMainWindow):
                     model.elements.append({'loc': [p2, [n2.x, n2.y]], 'EA': ea, 'EI': ei})
                     model.q_loads.append({'element_idx': len(model.elements)-1, 'q': [peak, 0], 'dir': direction, 'qp': 0})
                 
-                self.rebuild_system()
-
-            self.sync_blueprint_from_system(self.ss, self.frames[self.current_frame_name])
             self.rebuild_system()
             self.element_mgr_widget.refresh_data()
         except Exception as e:
@@ -1470,13 +1553,200 @@ class StructuralApp(QMainWindow):
     def open_element_manager(self):
         self.sidebar_selector.setCurrentText("Element Manager")
 
-    def solve_system(self):
-        if not self.ss.element_map:
-            return
-        try:
-            self.ss.solve()
-            QMessageBox.information(self, "Success", "Analysis Complete.")
+    def update_member_selector(self):
+        self.member_selector.blockSignals(True)
+        current = self.member_selector.currentText()
+        self.member_selector.clear()
+        for eid in sorted(self.ss.element_map.keys()):
+            self.member_selector.addItem(f"M-{eid}")
+        if current and self.member_selector.findText(current) != -1:
+            self.member_selector.setCurrentText(current)
+        self.member_selector.blockSignals(False)
+
+    def on_view_mode_changed(self, text):
+        self.member_selector.setVisible(text == "Member Analysis")
+        if text == "Results Table":
+            self.central_stack.setCurrentWidget(self.results_table_container)
+            self.show_results_table()
+        else:
+            self.central_stack.setCurrentWidget(self.canvas)
             self.plotter.update_plot()
+
+    def validate_grid_assignments(self):
+        """Checks if grid labels in the assignment table exist in X/Y definitions."""
+        self.grid_table.blockSignals(True)
+        valid = True
+        
+        try:
+            sx = [float(s.strip()) for s in self.grid_x_input.text().split(',') if s.strip()]
+            sy = [float(s.strip()) for s in self.grid_y_input.text().split(',') if s.strip()]
+        except ValueError:
+            sx, sy = [], []
+
+        num_x_lines = len(sx) + 1
+        num_y_lines = len(sy) + 1
+        alphabet = string.ascii_uppercase
+
+        for row in range(self.grid_table.rowCount()):
+            item = self.grid_table.item(row, 0)
+            if not item: continue
+            
+            label = item.text().upper().strip()
+            row_is_valid = False
+            
+            if label.isdigit():
+                val = int(label)
+                if 1 <= val <= num_x_lines:
+                    row_is_valid = True
+            else:
+                idx = alphabet.find(label)
+                if idx != -1 and idx < num_y_lines:
+                    row_is_valid = True
+            
+            if row_is_valid:
+                item.setBackground(Qt.GlobalColor.transparent)
+            else:
+                item.setBackground(Qt.GlobalColor.red)
+                valid = False
+        
+        self.grid_table.blockSignals(False)
+        return valid
+
+    def consolidate_results(self):
+        """Consolidates overlapping columns and footings from all frames."""
+        self.building.consolidated_results = {}
+        
+        # 1. Parse grid spacings
+        try:
+            sx = [float(s.strip()) for s in self.grid_x_input.text().split(',') if s.strip()]
+            sy = [float(s.strip()) for s in self.grid_y_input.text().split(',') if s.strip()]
+        except ValueError: return
+        gx = [0.0] + list(np.cumsum(sx))
+        gy = [0.0] + list(np.cumsum(sy))
+        
+        # 2. Map grid lines to frames
+        grid_mapping = [] # (line_label, frame_name, offset, is_vertical)
+        for row in range(self.grid_table.rowCount()):
+            line_item = self.grid_table.item(row, 0)
+            frame_widget = self.grid_table.cellWidget(row, 1)
+            offset_item = self.grid_table.item(row, 2)
+            if not line_item or not frame_widget or not offset_item: continue
+            
+            line = line_item.text().upper()
+            frame = frame_widget.currentText()
+            try: offset = float(offset_item.text())
+            except ValueError: offset = 0.0
+            grid_mapping.append((line, frame, offset, line.isdigit()))
+
+        # 3. Iterate through levels
+        for l_idx in range(self.grid_z_table.rowCount()):
+            try:
+                elev = float(self.grid_z_table.item(l_idx, 1).text())
+            except: continue
+            
+            # 4. Iterate through grid intersections
+            for i, x_pos in enumerate(gx):
+                for j, y_pos in enumerate(gy):
+                    n_total, mx_total, my_total = 0.0, 0.0, 0.0
+                    
+                    for line, fname, offset, is_vert in grid_mapping:
+                        if fname not in self.frames: continue
+                        f_ss = self.frames[fname].system
+                        
+                        if is_vert:
+                            if int(line) != i + 1: continue
+                            local_x = y_pos - gy[0] - offset
+                        else:
+                            alphabet = string.ascii_uppercase
+                            if alphabet.find(line) != j: continue
+                            local_x = x_pos - gx[0] - offset
+                        
+                        target_node_id = None
+                        for nid, node in f_ss.node_map.items():
+                            if np.isclose(node.vertex.x, local_x) and np.isclose(node.vertex.y, elev):
+                                target_node_id = nid; break
+                        
+                        if target_node_id is None: continue
+                        
+                        if target_node_id in f_ss.reaction_forces:
+                            reac = f_ss.reaction_forces[target_node_id]
+                            n_total += getattr(reac, 'Fy', 0.0)
+                            if is_vert: mx_total += getattr(reac, 'Tz', 0.0)
+                            else: my_total += getattr(reac, 'Tz', 0.0)
+                        
+                        for el in f_ss.element_map.values():
+                            if el.node_id2 == target_node_id: # Element above node
+                                n1, n2 = f_ss.node_map[el.node_id1].vertex, f_ss.node_map[el.node_id2].vertex
+                                if np.isclose(n1.x, n2.x): # Column
+                                    if el.axial_force is not None: n_total += el.axial_force[-1]
+                                    if el.bending_moment is not None:
+                                        if is_vert: mx_total += el.bending_moment[-1]
+                                        else: my_total += el.bending_moment[-1]
+
+                    if not np.allclose([n_total, mx_total, my_total], 0):
+                        self.building.consolidated_results[(i, j, l_idx)] = {'N': n_total, 'Mx': mx_total, 'My': my_total}
+
+    def show_results_table(self):
+        for i in reversed(range(self.results_table_layout.count())): 
+            item = self.results_table_layout.itemAt(i)
+            if item.widget(): item.widget().setParent(None)
+            
+        if self.building.consolidated_results:
+            lbl = QLabel("Consolidated Column/Footing Results")
+            lbl.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 10px;")
+            self.results_table_layout.addWidget(lbl)
+            table = QTableWidget(len(self.building.consolidated_results), 5)
+            table.setHorizontalHeaderLabels(["Grid", "Level", "N (kN)", "Mx (kNm)", "My (kNm)"])
+            table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            alphabet = string.ascii_uppercase
+            for row, (key, vals) in enumerate(sorted(self.building.consolidated_results.items())):
+                i, j, l = key
+                grid_lbl = f"{alphabet[j]}{i+1}"
+                level_lbl = self.grid_z_table.item(l, 0).text() if l < self.grid_z_table.rowCount() else f"L{l}"
+                table.setItem(row, 0, QTableWidgetItem(grid_lbl))
+                table.setItem(row, 1, QTableWidgetItem(level_lbl))
+                table.setItem(row, 2, QTableWidgetItem(f"{vals['N']:.2f}"))
+                table.setItem(row, 3, QTableWidgetItem(f"{vals['Mx']:.2f}"))
+                table.setItem(row, 4, QTableWidgetItem(f"{vals['My']:.2f}"))
+            table.setMinimumHeight(200)
+            self.results_table_layout.addWidget(table)
+
+        for fname, model in self.frames.items():
+            ss = model.system
+            if not ss.element_map: continue
+            lbl = QLabel(f"Frame: {fname}"); lbl.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 20px; color: #2196F3;")
+            self.results_table_layout.addWidget(lbl)
+            beams, columns = [], []
+            for eid, el in ss.element_map.items():
+                n1, n2 = ss.node_map[el.node_id1].vertex, ss.node_map[el.node_id2].vertex
+                if np.isclose(n1.x, n2.x): columns.append(el)
+                else: beams.append(el)
+            for group, group_label in [(beams, "Beams"), (columns, "Columns")]:
+                if not group: continue
+                self.results_table_layout.addWidget(QLabel(f"{group_label}"))
+                table = QTableWidget(len(group), 5); table.setHorizontalHeaderLabels(["ID", "Length (m)", "Max M (kNm)", "Max V (kN)", "Max N (kN)"])
+                table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+                for row, el in enumerate(group):
+                    m_max = np.max(np.abs(el.bending_moment)) if el.bending_moment is not None else 0
+                    v_max = np.max(np.abs(el.shear_force)) if el.shear_force is not None else 0
+                    n_max = np.max(np.abs(el.axial_force)) if el.axial_force is not None else 0
+                    table.setItem(row, 0, QTableWidgetItem(str(el.id))); table.setItem(row, 1, QTableWidgetItem(f"{el.l:.2f}"))
+                    table.setItem(row, 2, QTableWidgetItem(f"{m_max:.2f}")); table.setItem(row, 3, QTableWidgetItem(f"{v_max:.2f}")); table.setItem(row, 4, QTableWidgetItem(f"{n_max:.2f}"))
+                table.setMinimumHeight(150); self.results_table_layout.addWidget(table)
+        self.results_table_layout.addStretch()
+
+    def solve_system(self):
+        try:
+            if not self.validate_grid_assignments():
+                QMessageBox.warning(self, "Validation Error", "Some grid assignments refer to non-existent grid lines (highlighted in red).")
+                return
+
+            for name, model in self.frames.items():
+                if model.system.element_map: model.system.solve()
+            self.consolidate_results()
+            QMessageBox.information(self, "Success", "Analysis Complete for all frames.")
+            self.plotter.update_plot()
+            self.update_member_selector()
         except Exception as e:
             QMessageBox.critical(self, "Solver Error", str(e))
 
@@ -1562,7 +1832,8 @@ class StructuralApp(QMainWindow):
                 } for name, m in self.frames.items()},
                 "slabs": [[self.slabs_table.item(r, 0).text(),
                            self.slabs_table.item(r, 1).text(),
-                           self.slabs_table.item(r, 2).text()]
+                           self.slabs_table.item(r, 2).text(),
+                           self.slabs_table.item(r, 3).text()]
                           for r in range(self.slabs_table.rowCount())],
                 "current_frame": self.current_frame_name
             }
@@ -1622,12 +1893,11 @@ class StructuralApp(QMainWindow):
 
             # 4. Restore Slabs
             self.slabs_table.setRowCount(0)
-            for name, pts, load in data['slabs']:
+            for slab_data in data['slabs']:
                 row = self.slabs_table.rowCount()
                 self.slabs_table.insertRow(row)
-                self.slabs_table.setItem(row, 0, QTableWidgetItem(name))
-                self.slabs_table.setItem(row, 1, QTableWidgetItem(pts))
-                self.slabs_table.setItem(row, 2, QTableWidgetItem(load))
+                for col, val in enumerate(slab_data):
+                    self.slabs_table.setItem(row, col, QTableWidgetItem(str(val)))
             
             self.current_frame_name = data.get('current_frame', list(self.frames.keys())[0])
             items = self.frame_list.findItems(self.current_frame_name, Qt.MatchFlag.MatchExactly)
@@ -1658,6 +1928,12 @@ class StructuralApp(QMainWindow):
         self.frame_list.clear()
         self.global_frame_selector.clear()
         
+        # Foundation selection
+        sup_type = self.test_foundation_type.currentText()
+        self.frame_sup_type.setCurrentText(sup_type)
+        if sup_type == "Spring":
+            self.k_input.setText("5000")
+
         # Frame A: Used for lines 1-3 (running along Y, so 3 bays of 5m)
         self.frames["Frame 3-Bay"] = FrameModel()
         self.current_frame_name = "Frame 3-Bay"
@@ -1697,12 +1973,20 @@ class StructuralApp(QMainWindow):
 
         # 4. Add Slabs
         self.slabs_table.setRowCount(0)
-        for floor in ["Ground", "Floor 2", "Floor 3"]:
-            row = self.slabs_table.rowCount()
-            self.slabs_table.insertRow(row)
-            self.slabs_table.setItem(row, 0, QTableWidgetItem(f"{floor} Slab"))
-            self.slabs_table.setItem(row, 1, QTableWidgetItem("A1, A3, D3, D1"))
-            self.slabs_table.setItem(row, 2, QTableWidgetItem("5.0"))
+        alphabet = string.ascii_uppercase
+        for floor_idx, floor in enumerate(["Ground", "Floor 2", "Floor 3"]):
+            elev = [0.0, 3.5, 7.0][floor_idx]
+            # Iterate through grid cells: 2 bays in X (1-2, 2-3), 3 bays in Y (A-B, B-C, C-D)
+            for i in range(1, 3): # X lines 1 to 2, 2 to 3
+                for j in range(3): # Y lines A to B, B to C, C to D
+                    row = self.slabs_table.rowCount()
+                    self.slabs_table.insertRow(row)
+                    slab_name = f"{floor} {alphabet[j]}{i}-{alphabet[j+1]}{i+1}"
+                    pts_str = f"{alphabet[j]}{i}, {alphabet[j]}{i+1}, {alphabet[j+1]}{i+1}, {alphabet[j+1]}{i}"
+                    self.slabs_table.setItem(row, 0, QTableWidgetItem(slab_name))
+                    self.slabs_table.setItem(row, 1, QTableWidgetItem(pts_str))
+                    self.slabs_table.setItem(row, 2, QTableWidgetItem("5.0"))
+                    self.slabs_table.setItem(row, 3, QTableWidgetItem(f"{elev:.2f}"))
         
         self.on_slab_data_changed()
         self.update_floor_levels()

@@ -119,7 +119,7 @@ class ElementManagerWidget(QWidget):
         self.refresh_data()
 
     def refresh_data(self):
-        model = self.parent_app.frames[self.parent_app.current_frame_name]
+        model = self.parent_app.frame_templates[self.parent_app.current_template_name]
         self.ss = model.system
         
         self.block_signals(True)

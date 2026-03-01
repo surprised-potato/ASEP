@@ -1,0 +1,217 @@
+
+============================================================
+OpenSeesPy Investigation Run: 2025-12-26 02:54:11
+============================================================
+OpenSeesPy Package Version: Unknown
+OpenSeesPy File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/openseespy/__init__.py
+OpenSees Version: 3.7.1
+
+--- Module Attributes ---
+Total attributes found in openseespy.opensees: 243
+Callable functions: 232
+Non-callable attributes: 2
+Non-callable attributes list: ['OpenSeesParameter', 'sys']
+
+--- Model Setup & Return Types ---
+Initialized model('basic', '-ndm', 2, '-ndf', 2)
+  - node(1, 0.0, 0.0) return: None (Type: NoneType)
+  - fix(1, 1, 1) return: None (Type: NoneType)
+  - uniaxialMaterial('Elastic', 1, 3000.0) return: None (Type: NoneType)
+  - element('Truss', ...) return: None (Type: NoneType)
+  - load(4, ...) return: None (Type: NoneType)
+  - analyze(1) return: 0 (Type: int) (0=OK)
+
+--- Result Inspection ---
+  - nodeDisp(4) return: [0.5300927771322838, -0.1778936384693177] (Type: list)
+  - eleResponse(1, 'forces') return: [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+  - eigen() failed: See stderr output
+
+--- Query Functions ---
+  - getNodeTags(): [1, 2, 3, 4] (Type: list)
+  - getEleTags(): [1, 2, 3] (Type: list)
+  - getParamTags(): [] (Type: list)
+  - getLoadPatterns NOT found in ops module.
+  - getTime(): 1.0 (Type: float)
+  - getLoadFactor(1,): 1.0 (Type: float)
+
+--- JSON Serialization Test ---
+  - Standard json.dumps() successful.
+
+--- End of Log ---
+
+============================================================
+OpenSeesPy Investigation Run: 2025-12-26 02:56:01
+============================================================
+OpenSeesPy Package Version: Unknown
+OpenSeesPy File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/openseespy/__init__.py
+OpenSees Version: 3.7.1
+
+--- Module Attributes ---
+Total attributes found in openseespy.opensees: 243
+Callable functions: 232
+Non-callable attributes: 2
+Non-callable attributes list: ['OpenSeesParameter', 'sys']
+
+--- Model Setup & Return Types ---
+Initialized model('basic', '-ndm', 2, '-ndf', 2)
+  - node(1, 0.0, 0.0) return: None (Type: NoneType)
+  - fix(1, 1, 1) return: None (Type: NoneType)
+  - uniaxialMaterial('Elastic', 1, 3000.0) return: None (Type: NoneType)
+  - element('Truss', ...) return: None (Type: NoneType)
+  - load(4, ...) return: None (Type: NoneType)
+  - analyze(1) return: 0 (Type: int) (0=OK)
+
+--- Result Inspection ---
+  - nodeDisp(4) return: [0.5300927771322838, -0.1778936384693177] (Type: list)
+  - eleResponse(1, 'forces') return: [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+  - eigen(1) return: [190.02761755653242] (Type: list)
+
+--- Query Functions ---
+  - getNodeTags(): [1, 2, 3, 4] (Type: list)
+  - getEleTags(): [1, 2, 3] (Type: list)
+  - getParamTags(): [] (Type: list)
+  - getLoadPatterns NOT found in ops module.
+  - getTime(): 1.0 (Type: float)
+  - getLoadFactor(1,): 1.0 (Type: float)
+
+--- JSON Serialization Test ---
+  - Standard json.dumps() successful.
+
+--- End of Log ---
+
+============================================================
+OpenSeesPy Investigation Run: 2025-12-26 02:57:37
+============================================================
+OpenSeesPy Package Version: Unknown
+OpenSeesPy File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/openseespy/__init__.py
+OpenSees Version: 3.7.1
+
+--- Module Attributes ---
+Total attributes found in openseespy.opensees: 243
+Callable functions: 232
+Non-callable attributes: 2
+Non-callable attributes list: ['OpenSeesParameter', 'sys']
+
+--- Model Setup & Return Types ---
+Initialized model('basic', '-ndm', 2, '-ndf', 2)
+  - node(1, 0.0, 0.0) return: None (Type: NoneType)
+  - fix(1, 1, 1) return: None (Type: NoneType)
+  - uniaxialMaterial('Elastic', 1, 3000.0) return: None (Type: NoneType)
+  - element('Truss', ...) return: None (Type: NoneType)
+  - load(4, ...) return: None (Type: NoneType)
+  - analyze(1) return: 0 (Type: int) (0=OK)
+
+--- Result Inspection ---
+  - nodeDisp(4) return: [0.5300927771322838, -0.1778936384693177] (Type: list)
+  - nodeCoord(4) return: [72.0, 96.0] (Type: list)
+  - nodeMass(4) return: [1.0, 1.0] (Type: list)
+  - eleNodes(1) return: [1, 4] (Type: list)
+  - nodeReaction(1) [after ops.reactions()]: [-26.361113325587418, -35.148151100783224] (Type: list)
+  - eleResponse Probing (Truss Element 1):
+    - 'forces': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'force': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'globalForce': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'localForce': [-43.93518887597903, 0.0, 43.93518887597903, 0.0] (Type: list)
+    - 'basicForce': [43.93518887597903] (Type: list)
+    - 'deformations': [0.1757407555039161] (Type: list)
+    - 'basicDeformation': [0.1757407555039161] (Type: list)
+    - 'plasticDeformation': returned empty/zero ([])
+    - 'stresses': returned empty/zero ([])
+    - 'stress': returned empty/zero ([])
+    - 'strain': returned empty/zero ([])
+    - 'stiff': returned empty/zero ([])
+    - 'tangent': returned empty/zero ([])
+    - 'material': returned empty/zero ([])
+  - eigen(1) return: [190.02761755653242] (Type: list)
+
+--- Query Functions ---
+  - getNodeTags(): [1, 2, 3, 4] (Type: list)
+  - getEleTags(): [1, 2, 3] (Type: list)
+  - getParamTags(): [] (Type: list)
+  - getTime(): 1.0 (Type: float)
+  - getLoadFactor(1,): 1.0 (Type: float)
+  - getNP(): 1 (Type: int)
+  - getPID(): 0 (Type: int)
+  - getNumElements(): [3] (Type: list)
+  - getNumNodes NOT found in ops module.
+
+  - All available 'get*' functions in ops module:
+    getCDF, getConstrainedDOFs, getConstrainedNodes, getCrdTransfTags, getDampTangent, getEleClassTags, getEleLoadClassTags, getEleLoadData, getEleLoadTags, getEleTags, getFixedDOFs, getFixedNodes, getInverseCDF, getLSFTags, getLoadFactor, getMean, getNDF, getNDM, getNP, getNodeLoadData, getNodeLoadTags, getNodeTags, getNodeTemperature, getNumElements, getNumThreads, getPDF, getPID, getParamTags, getParamValue, getPatterns, getRVParamTag, getRVTags, getRVValue, getRetainedDOFs, getRetainedNodes, getStdv, getStrain, getStress, getTangent, getTime
+
+--- JSON Serialization Test ---
+  - Standard json.dumps() successful.
+
+--- End of Log ---
+
+============================================================
+OpenSeesPy Investigation Run: 2025-12-26 02:59:24
+============================================================
+OpenSeesPy Package Version: Unknown
+OpenSeesPy File: /home/daniel/programming/ASEP/.venv/lib/python3.12/site-packages/openseespy/__init__.py
+OpenSees Version: 3.7.1
+
+--- Module Attributes ---
+Total attributes found in openseespy.opensees: 243
+Callable functions: 232
+Non-callable attributes: 2
+Non-callable attributes list: ['OpenSeesParameter', 'sys']
+
+--- Model Setup & Return Types ---
+Initialized model('basic', '-ndm', 2, '-ndf', 2)
+  - node(1, 0.0, 0.0) return: None (Type: NoneType)
+  - fix(1, 1, 1) return: None (Type: NoneType)
+  - uniaxialMaterial('Elastic', 1, 3000.0) return: None (Type: NoneType)
+  - element('Truss', ...) return: None (Type: NoneType)
+  - load(4, ...) return: None (Type: NoneType)
+  - analyze(1) return: 0 (Type: int) (0=OK)
+
+--- Result Inspection ---
+  - nodeDisp(4) return: [0.5300927771322838, -0.1778936384693177] (Type: list)
+  - nodeCoord(4) return: [72.0, 96.0] (Type: list)
+  - nodeMass(4) return: [1.0, 1.0] (Type: list)
+  - eleNodes(1) return: [1, 4] (Type: list)
+  - nodeReaction(1) [after ops.reactions()]: [-26.361113325587418, -35.148151100783224] (Type: list)
+  - eleResponse Probing (Truss Element 1):
+    - 'forces': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'force': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'globalForce': [-26.361113325587418, -35.148151100783224, 26.361113325587418, 35.148151100783224] (Type: list)
+    - 'localForce': [-43.93518887597903, 0.0, 43.93518887597903, 0.0] (Type: list)
+    - 'basicForce': [43.93518887597903] (Type: list)
+    - 'deformations': [0.1757407555039161] (Type: list)
+    - 'basicDeformation': [0.1757407555039161] (Type: list)
+    - 'plasticDeformation': returned empty/zero ([])
+    - 'stresses': returned empty/zero ([])
+    - 'stress': returned empty/zero ([])
+    - 'strain': returned empty/zero ([])
+    - 'stiff': returned empty/zero ([])
+    - 'tangent': returned empty/zero ([])
+    - 'material': returned empty/zero ([])
+  - eigen(1) return: [190.02761755653242] (Type: list)
+
+--- Query Functions ---
+  - getNodeTags(): [1, 2, 3, 4] (Type: list)
+  - getEleTags(): [1, 2, 3] (Type: list)
+  - getParamTags(): [] (Type: list)
+  - getTime(): 1.0 (Type: float)
+  - getLoadFactor(1,): 1.0 (Type: float)
+  - getNP(): 1 (Type: int)
+  - getPID(): 0 (Type: int)
+  - getNumElements(): [3] (Type: list)
+  - getFixedNodes(): [1, 2, 3] (Type: list)
+  - getPatterns(): [1] (Type: list)
+  - getEleClassTags(): [12, 12, 12] (Type: list)
+
+--- Specific Getter Tests ---
+  - getFixedDOFs(1): [1, 2]
+  - getNodeLoadTags(4, 1) failed: See stderr output
+
+  - All available 'get*' functions in ops module:
+    getCDF, getConstrainedDOFs, getConstrainedNodes, getCrdTransfTags, getDampTangent, getEleClassTags, getEleLoadClassTags, getEleLoadData, getEleLoadTags, getEleTags, getFixedDOFs, getFixedNodes, getInverseCDF, getLSFTags, getLoadFactor, getMean, getNDF, getNDM, getNP, getNodeLoadData, getNodeLoadTags, getNodeTags, getNodeTemperature, getNumElements, getNumThreads, getPDF, getPID, getParamTags, getParamValue, getPatterns, getRVParamTag, getRVTags, getRVValue, getRetainedDOFs, getRetainedNodes, getStdv, getStrain, getStress, getTangent, getTime
+
+--- JSON Serialization Test ---
+  - Standard json.dumps() successful.
+
+--- Model Dump Test ---
+  - printModel('-JSON') executed. Output at investigation_logs/model_dump.json
+
+--- End of Log ---

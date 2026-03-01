@@ -1,0 +1,12 @@
+import pandas as pd
+xls = pd.ExcelFile('aisc-shapes-database-v160-2.xlsx')
+db = pd.read_excel('aisc-shapes-database-v160-2.xlsx', sheet_name='Database v16.0')
+print("Columns starting with 'r':")
+print([c for c in db.columns.tolist() if c.startswith('r')])
+print("Columns starting with 'A':")
+print([c for c in db.columns.tolist() if c.startswith('A')])
+print("Columns ending with 'M':")
+print([c for c in db.columns.tolist() if c.endswith('M')])
+print("Metric relevant columns:")
+print([c for c in db.columns.tolist() if 'M' in c])
+print(db.columns.tolist()[150:])
