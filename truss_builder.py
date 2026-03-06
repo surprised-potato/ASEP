@@ -19,6 +19,7 @@ def build_longitudinal_truss(results_map=None):
         
     ss = SystemElements()
     N, depth, dx, dy = 16, 0.6, 1.16875, 1.0
+    y_base = 7.2
     dy_per_panel = dy / N
     
     chord_bot_ids, chord_top_ids, web_vert_ids, web_diag_ids = [], [], [], []
@@ -32,53 +33,61 @@ def build_longitudinal_truss(results_map=None):
     # Bottom Chords
     EA_val, EI_val = get_props("Bottom Chord")
     for i in range(N):
-        x1, y1 = i * dx, 4 + i * dy_per_panel
-        x2, y2 = (i + 1) * dx, 4 + (i + 1) * dy_per_panel
+        x1, y1 = i * dx, y_base + i * dy_per_panel
+        x2, y2 = (i + 1) * dx, y_base + (i + 1) * dy_per_panel
         if EA_val: chord_bot_ids.append(ss.add_element(location=[[x1, y1], [x2, y2]], EA=EA_val, EI=EI_val, spring={1: 0, 2: 0}))
         else: chord_bot_ids.append(ss.add_truss_element(location=[[x1, y1], [x2, y2]]))
         
     # Top Chords
     EA_val, EI_val = get_props("Top Chord")
     for i in range(N):
-        x1, y1 = i * dx, 4 + depth + i * dy_per_panel
-        x2, y2 = (i + 1) * dx, 4 + depth + (i + 1) * dy_per_panel
+        x1, y1 = i * dx, y_base + depth + i * dy_per_panel
+        x2, y2 = (i + 1) * dx, y_base + depth + (i + 1) * dy_per_panel
         if EA_val: chord_top_ids.append(ss.add_element(location=[[x1, y1], [x2, y2]], EA=EA_val, EI=EI_val, spring={1: 0, 2: 0}))
         else: chord_top_ids.append(ss.add_truss_element(location=[[x1, y1], [x2, y2]]))
         
     # Vertical Webs
     EA_val, EI_val = get_props("Vertical Webs")
     for i in range(N + 1):
-        x, y_bot = i * dx, 4 + i * dy_per_panel
+        x, y_bot = i * dx, y_base + i * dy_per_panel
         if EA_val: web_vert_ids.append(ss.add_element(location=[[x, y_bot], [x, y_bot + depth]], EA=EA_val, EI=EI_val, spring={1: 0, 2: 0}))
         else: web_vert_ids.append(ss.add_truss_element(location=[[x, y_bot], [x, y_bot + depth]]))
         
     # Diagonal Webs
     EA_val, EI_val = get_props("Diagonal Webs")
     for i in range(N):
-        x1, y_bot = i * dx, 4 + i * dy_per_panel
-        x2, y_top2 = (i + 1) * dx, 4 + depth + (i + 1) * dy_per_panel
+        x1, y_bot = i * dx, y_base + i * dy_per_panel
+        x2, y_top2 = (i + 1) * dx, y_base + depth + (i + 1) * dy_per_panel
         if EA_val: web_diag_ids.append(ss.add_element(location=[[x1, y_bot], [x2, y_top2]], EA=EA_val, EI=EI_val, spring={1: 0, 2: 0}))
         else: web_diag_ids.append(ss.add_truss_element(location=[[x1, y_bot], [x2, y_top2]]))
         
-    # Supports
-    # Node at x=0 is hinged
-    y_support = 4 + (0.0 / dx) * dy_per_panel
-    ss.add_support_hinged(node_id=ss.find_node_id([0.0, y_support]))
+    # Columns replacing hinged/roller supports
+    col_EA, col_EI = get_props("Columns")
+    if not col_EA:
+        col_EA = 0.01 * 200e9
+        col_EI = 0.0001 * 200e9
+        
+    col_ids = []
     
-    # Node at x=18.7 is a roller (allows x expansion)
-    y_support = 4 + (18.7 / dx) * dy_per_panel
-    ss.add_support_roll(node_id=ss.find_node_id([18.7, y_support]))
+    # Left short column (7.2m)
+    col_ids.append(ss.add_element(location=[[0.0, 0.0], [0.0, 7.2]], EA=col_EA, EI=col_EI))
+    ss.add_support_fixed(node_id=ss.find_node_id([0.0, 0.0]))
+    
+    # Right tall column (8.2m) - truss goes to exactly 18.7 horizontally
+    col_ids.append(ss.add_element(location=[[18.7, 0.0], [18.7, 8.2]], EA=col_EA, EI=col_EI))
+    ss.add_support_fixed(node_id=ss.find_node_id([18.7, 0.0]))
     
     mapping = {
         "Top Chord": chord_top_ids, 
         "Bottom Chord": chord_bot_ids, 
         "Vertical Webs": web_vert_ids, 
-        "Diagonal Webs": web_diag_ids
+        "Diagonal Webs": web_diag_ids,
+        "Columns": col_ids
     }
     
     # Apply Loads
     for eid in chord_top_ids: 
-        ss.q_load(q=-2.3, element_id=eid, direction='y')
+        ss.q_load(q=-4.6, element_id=eid, direction='y') # Doubled from -2.3 due to doubled tributary width
     ss.q_load(q=3.2, element_id=chord_bot_ids[0], direction='x')
     
     return ss, mapping
@@ -107,9 +116,9 @@ def build_transverse_stiffening_truss(transfer_load_kn=21.5, results_map=None):
     ts.add_support_hinged(node_id=ts.find_node_id([0, 0]))
     ts.add_support_roll(node_id=ts.find_node_id([L_trans, 0]))
     
-    # Point Loads (Reactions from longitudinal)
-    for i in range(11):
-        ts.point_load(Fy=-transfer_load_kn, node_id=ts.find_node_id([i * 2.0675, 0]))
+    # Point Loads (Reactions from longitudinal trusses placed at columns only)
+    for i in range(6):
+        ts.point_load(Fy=-transfer_load_kn, node_id=ts.find_node_id([i * 4.135, 0]))
         
     # Apply Member Properties
     mapping = {
@@ -137,17 +146,16 @@ def build_transverse_frame():
         tf.add_element(location=[[i * col_spacing, 0], [i * col_spacing, col_height]], E=200e9, A=0.01)
         
     # Beams
-    for k in range(11):
-        x1, x2 = k * 2.0675, (k+1) * 2.0675
-        if x2 <= 20.675:
-            tf.add_element(location=[[x1, col_height], [x2, col_height]], E=200e9, A=0.01)
+    for k in range(5):
+        x1, x2 = k * col_spacing, (k+1) * col_spacing
+        tf.add_element(location=[[x1, col_height], [x2, col_height]], E=200e9, A=0.01)
             
     # Supports
     for i in range(num_columns): 
         tf.add_support_fixed(node_id=tf.find_node_id([i * col_spacing, 0]))
         
-    # Point Loads
-    for k in range(11): 
-        tf.point_load(Fy=-20.32, node_id=tf.find_node_id([k * 2.0675, col_height]))
+    # Point Loads (Load doubled from -20.32 due to doubled tributary width)
+    for k in range(num_columns): 
+        tf.point_load(Fy=-40.64, node_id=tf.find_node_id([k * col_spacing, col_height]))
         
     return tf

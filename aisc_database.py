@@ -17,7 +17,7 @@ class AISCDatabase:
             allowed_types = ['W', 'HSS', 'L', 'WT', '2L']
             self.db_filtered = db[db['Type'].isin(allowed_types)].copy()
             
-            props = ['A', 'W', 'rx', 'ry', 'rz', 'Ix', 'Iy']
+            props = ['A', 'W', 'rx', 'ry', 'rz', 'Ix', 'Iy', 'bf', 'b', 'd']
             for p in props:
                 self.db_filtered[p] = pd.to_numeric(self.db_filtered[p], errors='coerce')
             
@@ -49,7 +49,7 @@ class AISCDatabase:
             if cap_t < Pu_kips: return False, cap_t, klr
             return True, cap_t, klr
 
-    def select_candidates(self, Pu_kN, L_m, family='HSS'):
+    def select_candidates(self, Pu_kN, L_m, family='HSS', bf_max=None):
         """Returns a list of all shapes capable of supporting the load, sorted by weight."""
         if self.db_filtered is None: return []
         
@@ -61,9 +61,25 @@ class AISCDatabase:
         valid = []
         
         for _, row in subset.iterrows():
-            # Estimate Fy based on shape type
+            # Calculate cross-sectional width for geometric constraints
+            width_in = 0
             type_str = str(row['Type'])
-            fy = 46 if type_str.startswith('HSS') else (36 if type_str in ['L', '2L'] else 50)
+            if type_str == 'WT':
+                width_in = row['bf'] if pd.notna(row['bf']) else 0
+            elif type_str == 'L':
+                width_in = max(row['b'] if pd.notna(row['b']) else 0, row['d'] if pd.notna(row['d']) else 0)
+            elif type_str == '2L':
+                w_b = row['b'] if pd.notna(row['b']) else 0
+                width_in = 2 * w_b + 0.375 # Assuming 3/8" gusset plate gap
+            elif type_str == 'W':
+                width_in = row['bf'] if pd.notna(row['bf']) else 0
+
+            # Filter if shape is geometrically wider than chord
+            if bf_max is not None and width_in > bf_max:
+                continue
+
+            # Enforce A36 steel for all members per user request
+            fy = 36
             
             passes, cap_kips, klr = self.check_shape(row['A'], row['r_min'], Pu_kips, L_in, Fy=fy)
             if passes:
@@ -74,15 +90,16 @@ class AISCDatabase:
                     'Area': float(row['A']), 
                     'Ix': float(row['Ix']), 
                     'KL/r': float(klr),
-                    'Capacity_kN': float(cap_kN)
+                    'Capacity_kN': float(cap_kN),
+                    'bf_in': float(width_in)
                 })
                 
         # Sort by weight (lightest first)
         return sorted(valid, key=lambda x: x['Weight'])
 
-    def select_lightest(self, Pu_kN, L_m, family='HSS'):
+    def select_lightest(self, Pu_kN, L_m, family='HSS', bf_max=None):
         """Returns the single lightest shape capable of supporting the load."""
-        candidates = self.select_candidates(Pu_kN, L_m, family)
+        candidates = self.select_candidates(Pu_kN, L_m, family, bf_max)
         return candidates[0] if candidates else None
 
 # Singleton-like instance for easy import across modules

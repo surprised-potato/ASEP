@@ -5,44 +5,177 @@ description: Modular architecture for automated structural simulation and AISC m
 
 # Modular Structural Analysis Skill
 
-This skill documents the preferred architecture for simulating structural systems using `anastruct` and performing automated member sizing with the AISC Shapes Database.
+This skill documents the preferred architecture for simulating structural systems using `anastruct` and performing automated member sizing with the AISC Shapes Database v16.0.
 
 ## Key Learnings & Rules (CRITICAL)
 
-1. **Do NOT update element properties post-creation**: `anastruct` does not cleanly re-evaluate deflections continuously when `ss.element_map[eid].EA` or `EI` are modified directly before a second `solve()`.
-2. **Rebuild the system for optimization**: During iterative optimization (e.g., resizing members to meet $L/\delta$ limits), you MUST completely reconstruct the `SystemElements` instance and inject the `EA` and `EI` properties directly into `ss.add_element(..., EA=..., EI=...)` at creation time.
-3. **Use `add_element` for Custom Properties**: `add_truss_element` does not accept `EA` and `EI` keyword arguments in all versions! Use `add_element` combined with `spring={1: 0, 2: 0}` to simulate hinged truss connections while explicitly setting stiffness properties.
-4. **Avoid massive Notebook generation**: Do not use Python scripts to generate huge strings of Python code to write to `.ipynb` files. This causes `UnicodeEncodeError`, `NameError`, and string escaping nightmares.
-5. **Use a Modular CLI Approach**: Separate concerns into distinct Python files:
-   - `aisc_database.py`: Excel loading and AISC capacity math.
-   - `truss_builder.py`: Pure `anastruct` geometry definitions.
-   - `optimizer.py`: The iterative scaling loop.
+### anastruct Gotchas
+
+1. **Do NOT update element properties post-creation**: `anastruct` does not cleanly re-evaluate deflections when `ss.element_map[eid].EA` or `EI` are modified directly before a second `solve()`.
+2. **Rebuild the system for optimization**: During iterative optimization (e.g., resizing members to meet $L/\delta$ limits), you MUST completely reconstruct the `SystemElements` instance and inject `EA` and `EI` properties directly into `ss.add_element(..., EA=..., EI=...)` at creation time.
+3. **Use `add_element` for Custom Properties**: `add_truss_element` does not accept `EA` and `EI` keyword arguments in all versions! Use `add_element` combined with `spring={1: 0, 2: 0}` to simulate hinged truss connections while explicitly setting stiffness properties:
+   ```python
+   ss.add_element(
+       location=[[x1, y1], [x2, y2]], 
+       EA=area_si * E_si, 
+       EI=inertia_si * E_si, 
+       spring={1: 0, 2: 0} # Hinges for truss behavior
+   )
+   ```
+4. **Node ID handling**: When extracting support reactions, `anastruct` may return `Node` objects or plain integer IDs depending on the version. Always use `nid = node.id if hasattr(node, 'id') else node` before calling `ss.get_node_results_system(nid)`.
+
+### Project Architecture
+
+5. **Avoid massive Notebook generation**: Do not use Python scripts to generate huge strings of Python code to write to `.ipynb` files. This causes `UnicodeEncodeError`, `NameError`, and string escaping nightmares.
+6. **Use a Modular CLI Approach**: Separate concerns into distinct Python files:
+   - `aisc_database.py`: Excel loading, AISC capacity math, geometric width filtering.
+   - `truss_builder.py`: Pure `anastruct` geometry definitions and load application.
+   - `optimizer.py`: The iterative scaling loop with geometric constraints.
    - `report_generator.py`: Output generation to Markdown with inline `.png` plots.
    - `simulate_full_system.py`: A clean orchestration script.
 
-## Procedures
+### Unit Conversion Constants (Imperial ↔ SI)
 
-### 1. Database Loading (`aisc_database.py`)
-Load the Excel database (`aisc-shapes-database-v160-2.xlsx`) and build a class containing filtering and capacity checks (Slenderness limits like $KL/r \leq 200$, Tension $\phi P_n$, Compression $F_{cr}$).
+These are used frequently in the codebase:
 
-### 2. Geometry Creation (`truss_builder.py`)
+| Conversion | Factor | Usage |
+| --- | --- | --- |
+| Area: in² → m² | `× 0.00064516` | `EA = Area_in2 * 0.00064516 * 200e9` |
+| Inertia: in⁴ → m⁴ | `× 4.1623e-7` | `EI = Ix_in4 * 4.1623e-7 * 200e9` |
+| Force: kN → kips | `× 0.224809` | AISC checks use kips |
+| Length: m → in | `× 39.3701` | AISC checks use inches |
+| Weight: plf (lb/ft) → kg/m | `× 1.488` | For mass estimation |
+
+---
+
+## Module Reference
+
+### 1. Database Loading & Selection (`aisc_database.py`)
+
+**Class**: `AISCDatabase`
+
+Loads the Excel database (`aisc-shapes-database-v160-2.xlsx`) and provides filtering and capacity checks.
+
+**Key capabilities:**
+- **Shape types supported**: `W`, `HSS`, `L`, `WT`, `2L`
+- **Capacity checks**: AISC Chapter E compression ($F_{cr}$, $\phi P_n$) and tension ($\phi P_n = 0.9 F_y A_g$)
+- **Slenderness limits**: $KL/r \leq 200$ (compression), $KL/r \leq 300$ (tension)
+- **Geometric width filtering** (`bf_max` parameter): Filters out shapes wider than a specified limit. Width is calculated differently per shape type:
+  - `WT`: uses `bf` (flange width)
+  - `L`: uses `max(b, d)` (outstanding leg dimension)
+  - `2L`: uses `2*b + 0.375` (assumes 3/8" gusset plate gap)
+  - `W`: uses `bf` (flange width)
+- **Material**: Currently enforced as A36 steel ($F_y = 36$ ksi) for all shapes.
+
+**Key methods:**
 ```python
-# Correct instantiation with properties
-ss.add_element(
-    location=[[x1, y1], [x2, y2]], 
-    EA=area_si * E_si, 
-    EI=inertia_si * E_si, 
-    spring={1: 0, 2: 0} # Hinges
-)
+# Select all passing shapes, sorted lightest-first
+candidates = aisc_db.select_candidates(Pu_kN, L_m, family='L', bf_max=4.0)
+
+# Select the single lightest passing shape
+shape = aisc_db.select_lightest(Pu_kN, L_m, family='WT', bf_max=None)
 ```
 
+**Return dict keys per shape:**
+`Label`, `Weight` (plf), `Area` (in²), `Ix` (in⁴), `KL/r`, `Capacity_kN`, `bf_in`
+
+---
+
+### 2. Geometry Creation (`truss_builder.py`)
+
+**Functions:**
+- `build_longitudinal_truss(results_map=None)` → `(SystemElements, mapping_dict)`
+- `build_transverse_stiffening_truss(transfer_load_kn, results_map=None)` → `(SystemElements, mapping_dict)`
+- `build_transverse_frame()` → `SystemElements`
+- `get_max_group_forces(system, ids)` → `float` (max absolute axial force in kN)
+
+**Current longitudinal truss geometry:**
+- 16 panels, 18.7m span, 0.6m depth, 1.0m rise (sloped)
+- Bottom chord base elevation: `y_base = 7.2` (sits atop columns)
+- Two fixed-base columns: Left = 7.2m tall, Right = 8.2m tall
+- Loads: `-4.6 kN/m` distributed on top chord (gravity), `3.2 kN/m` lateral on first bottom chord panel
+
+**Pattern for injecting AISC properties:**
+```python
+def get_props(group_name):
+    r = results_map.get(group_name)
+    if r:
+        return float(r['Area'] * 0.00064516) * 200e9, float(r['Ix'] * 4.1623e-7) * 200e9
+    return 0, 0  # defaults
+```
+
+---
+
 ### 3. Iterative Optimization (`optimizer.py`)
-To optimize structural deflection (e.g. $L/\delta \geq 240$):
-1. Build the truss with current shape properties.
-2. Run `ss.solve()`.
-3. Check `ss.system_displacement_vector` (max vertical displacement).
-4. If it fails, select the next heaviest shapes from the AISC database based on forces.
-5. **Re-call the geometry creation function** with the new shapes to build a fresh, new `SystemElements` object before the next `solve()`.
+
+**Function**: `run_longitudinal_optimization(target_ltod=240, max_iter=15, chord_family="WT", web_family="L")`
+
+**Optimization sequence:**
+1. Build truss with default stiffness → `solve()` → extract member forces.
+2. **Size chords first** (Top Chord, Bottom Chord) using `select_lightest()`.
+3. **Derive chord flange width** (`bf_chord`) from the narrowest selected chord.
+4. **Size webs with geometric constraint** (`bf_max=bf_chord`). If an `L` shape fails the width or capacity check, **automatically fall back to `2L`** (double angle).
+5. Enter deflection optimization loop:
+   - Rebuild system with current properties → `solve()` → check $L/\delta$.
+   - If deflection fails, step up to the next heaviest chord from the candidate list.
+   - Repeat until $L/\delta \geq$ target or max iterations reached.
+6. **Size columns** from the max vertical support reaction using `W` shapes.
+7. **Compute total truss weight** (kg) and **estimated material cost** (PHP) at a configurable rate.
+
+**Geometric web constraint logic:**
+```python
+bf_chord = min(top_chord['bf_in'], bottom_chord['bf_in'])
+
+res = aisc_db.select_lightest(p, L, family='L', bf_max=bf_chord)
+if res is None and family == 'L':
+    # Fallback: single angle too wide → use double angle
+    res = aisc_db.select_lightest(p, L, family='2L', bf_max=bf_chord)
+```
+
+**Cost estimation:**
+```python
+for group in truss_groups:
+    weight_lbs = plf * (L_m * 3.28084) * member_count
+    total_weight_kg += weight_lbs * 0.453592
+total_cost_php = total_weight_kg * 60  # PHP/kg rate
+```
+
+---
 
 ### 4. Markdown Reporting (`report_generator.py`)
-Instead of a notebook, use `fig = ss.show_displacement(show=False)` to save `.png` plots locally, and write tables of selected shapes and pass/fail metrics into a cleanly formatted `.md` file.
+
+**Function**: `generate_markdown_report(longitudinal_data, longitudinal_data_2l, frame_data)`
+
+**Report sections generated:**
+1. **Section 1**: Longitudinal Truss (WT Chords, L Webs) — member table, deflection, plots, weight, cost
+2. **Section 1B**: Alternative Longitudinal Truss (2L Chords) — same format
+3. **Section 1C**: Alternative Concrete Substructure — computed from support reactions:
+   - **Square Column**: Sized by slenderness ($L/h \leq 30$), includes eccentricity moment ($M_u = P_u \times e$)
+   - **Isolated Footing**: Sized by allowable soil bearing pressure (100 kPa)
+   - Material assumptions: $f'_c = 21$ MPa, $f_y = 275$ MPa (Grade 40)
+4. **Section 2**: Transverse Moment Frame — structure, axial, displacement, reaction plots
+
+**Plot generation pattern:**
+```python
+fig = ss.show_structure(show=False)
+fig.savefig('images/longitudinal_structure.png', dpi=150, bbox_inches='tight')
+plt.close(fig)
+```
+
+---
+
+### 5. Orchestration (`simulate_full_system.py`)
+
+Clean entry point that calls optimization functions in sequence and passes results to the report generator. Run with: `python simulate_full_system.py`
+
+---
+
+## Common Pitfalls & Fixes
+
+| Problem | Root Cause | Fix |
+| --- | --- | --- |
+| `math domain error` in footing calc | Reaction force is negative (downward) | Use `abs()` before `math.sqrt()` |
+| `NameError: avg_reaction_kn` | Variable deleted during refactor | Ensure `avg_reaction_kn = max_react_y` is assigned before `return` |
+| `TypeError` on node results | Node objects vs IDs | Use `nid = node.id if hasattr(node, 'id') else node` |
+| Web member juts out of chord flange | Angle leg wider than WT flange | Pass `bf_max=chord_bf` to `select_lightest()`, fallback to `2L` |
+| Deflection doesn't change after re-solve | Properties set via `element_map` | Rebuild entire `SystemElements` with `add_element(EA=..., EI=...)` |
