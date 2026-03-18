@@ -7,6 +7,28 @@ description: Modular architecture for automated structural simulation and AISC m
 
 This skill documents the preferred architecture for simulating structural systems using `anastruct` and performing automated member sizing with the AISC Shapes Database v16.0.
 
+## Workflow Steps (MANDATORY)
+
+### Step 0: Initial Interview
+Before starting any analysis, the agent MUST interview the user to capture the following requirements. DO NOT proceed without these parameters:
+1.  **Structure Type**: (e.g., Gable Frame, Mono-slope, Truss, Floor System)
+2.  **Dimensions**:
+    - **Span**: Total length between supports ($m$)
+    - **Spacing**: Distance between frames/trusses ($m$)
+    - **Height**: Column or eave height ($m$)
+    - **Pitch/Slope**: Roof slope in degrees or ratio
+3.  **Loading Requirements**:
+    - **Gravity**: Dead/Live loads in $kPa$ or $kN/m$ (include finishes, solar panels, etc.)
+    - **Wind**: Design wind speed or lateral pressure ($kPa$)
+    - **Seismic**: Any specific regional requirements (if known)
+4.  **Material Preferences**:
+    - **Steel**: Preferred shapes (W, HSS, L, etc.) and grade.
+    - **Concrete**: Support type (Pedestal, Wall, Footing type).
+5.  **Output Requirements**:
+    - Specific plots or reports required.
+
+### Step 1: Planning...
+
 ## Key Learnings & Rules (CRITICAL)
 
 ### anastruct Gotchas
@@ -65,6 +87,33 @@ ASEP/
    db_path = os.path.join(_PROJECT_ROOT, 'data', 'aisc-shapes-database-v160-2.xlsx')
    output_dir = os.path.join(_PROJECT_ROOT, 'output', project_name)
    ```
+
+---
+
+## Load Computation & Combinations
+
+### 1. Line Load from Area Pressure (Load Computation)
+When converting area loads ($kN/m^2$ or $kPa$) to line loads ($kN/m$) for frame analysis, use the frame spacing (Tributary Width):
+$$w [kN/m] = p [kPa] \times Spacing [m]$$
+
+**Standard Methodology for Report Inclusion:**
+Include a "Loading Data" section in the report that explicitly shows:
+- **Dead Load ($DL$):** $0.9 kPa \times 4.7m = 4.23 kN/m$
+- **Wind Load ($WL$):** $0.9 kPa \times 4.7m = 4.23 kN/m$
+- **Load Proxy for Seismic:** $0.10 \times DL = 0.42 kN/m$
+
+### 2. Standard Load Combinations (NSCP/LRFD)
+Follow the National Structural Code of the Philippines (NSCP 2015) or LRFD patterns. Core combinations for steel analysis:
+
+| ID | Combination | Usage |
+| --- | --- | --- |
+| **LC1** | $1.4 D$ | Basic gravity (dead load only) |
+| **LC2** | $1.2 D + 1.6 L + 0.5 (L_r \text{ or } R)$ | Standard occupancy gravity |
+| **LC3** | $1.2 D + 1.0 W + L + 0.5 (L_r \text{ or } R)$ | Wind + Gravity |
+| **LC4** | $1.2 D + 1.0 E + L + 0.2 S$ | Seismic + Gravity |
+| **LC5** | $0.9 D + 1.0 W$ | Wind Uplift (Net suction) |
+
+*Note: In `anastruct`, build a `SystemElements` instance per load combination or use superposition for linear analysis.*
 
 ---
 
@@ -190,6 +239,57 @@ Clean entry point that calls optimization functions in sequence and passes resul
 
 ---
 
+## Advanced Result Extraction
+
+### 1. Standardized Reaction Extraction
+When preparing data for foundation design (footings), always extract the full set of reactions ($R_x, R_y, M_z$) from support nodes.
+
+```python
+def get_reactions(ss, node_id):
+    res = ss.get_node_results_system(node_id)
+    if isinstance(res, dict):
+        return {
+            'Rx': abs(res.get('Fx', 0.0)),
+            'Ry': abs(res.get('Fy', 0.0)),
+            'Mz': abs(res.get('Tz', 0.0))
+        }
+    elif isinstance(res, (list, np.ndarray)):
+        return {
+            'Rx': abs(res[0]),
+            'Ry': abs(res[1]),
+            'Mz': abs(res[2])
+        }
+    return {'Rx': 0.0, 'Ry': 0.0, 'Mz': 0.0}
+```
+
+### 2. Deflection & Force Envelopes
+For linear systems with multiple load combinations, the max effect (Envelope) should be used for member selection.
+- **Deflection**: Max vertical displacement at span middle or apex.
+- **Axial/Shear/Moment**: Max absolute values across all elements in a group.
+
+---
+
+## Standard Structural Report Outline
+
+Every structural analysis report MUST follow this logical flow:
+
+1.  **Project Overview**: Frame type, span, spacing, and column height.
+2.  **Structural Assumptions**: Material properties ($F_y, f'_c$) and soil parameters.
+3.  **Loading Data**:
+    - Load Computation (Pressure $\to$ Line Load).
+    - Load Combinations (NSCP/LRFD Cases).
+4.  **Analysis Results**: 
+    - Selected Member Tables (AISC Label, Weight, Capacity Ratio).
+    - Deflection Summary (Max vs Allowable $L/240$).
+5.  **Support Reactions**: Summary table for $R_x, R_y, M_z$.
+6.  **Substructure Design**: Concrete pedestal and isolated footing sizing.
+7.  **Conclusion & Visualizations**:
+    - Structure/Loads Plot.
+    - Axial Force/Moment Diagrams.
+    - Displacement/Reactions Plots.
+
+---
+
 ## Common Pitfalls & Fixes
 
 | Problem | Root Cause | Fix |
@@ -199,3 +299,4 @@ Clean entry point that calls optimization functions in sequence and passes resul
 | `TypeError` on node results | Node objects vs IDs | Use `nid = node.id if hasattr(node, 'id') else node` |
 | Web member juts out of chord flange | Angle leg wider than WT flange | Pass `bf_max=chord_bf` to `select_lightest()`, fallback to `2L` |
 | Deflection doesn't change after re-solve | Properties set via `element_map` | Rebuild entire `SystemElements` with `add_element(EA=..., EI=...)` |
+| `KeyError` on `element.node_map` | Keys are node IDs, not indices | Use `list(el.node_map.keys())[0]` or `.id` attribute of the node. |
