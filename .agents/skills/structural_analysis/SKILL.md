@@ -27,24 +27,44 @@ This skill documents the preferred architecture for simulating structural system
 ### Project Architecture
 
 5. **Avoid massive Notebook generation**: Do not use Python scripts to generate huge strings of Python code to write to `.ipynb` files. This causes `UnicodeEncodeError`, `NameError`, and string escaping nightmares.
-6. **Use a Modular CLI Approach**: Separate concerns into distinct Python files:
-   - `aisc_database.py`: Excel loading, AISC capacity math, geometric width filtering.
-   - `truss_builder.py`: Pure `anastruct` geometry definitions and load application.
-   - `optimizer.py`: The iterative scaling loop with geometric constraints.
-   - `report_generator.py`: Output generation to Markdown with inline `.png` plots.
-   - `simulate_full_system.py`: A clean orchestration script.
+6. **Use a Modular CLI Approach**: The project follows a clean directory structure:
 
-### Unit Conversion Constants (Imperial ↔ SI)
+```
+ASEP/
+├── data/                        # Reference data (AISC xlsx)
+│   └── aisc-shapes-database-v160-2.xlsx
+├── src/                         # Core pipeline (Python package)
+│   ├── __init__.py
+│   ├── aisc_database.py         # Excel loading, AISC capacity math, width filtering
+│   ├── truss_builder.py         # anastruct geometry definitions and loads
+│   ├── optimizer.py              # Iterative scaling loop with geometric constraints
+│   ├── report_generator.py       # Markdown report + PNG plot generation
+│   └── simulate_full_system.py   # Entry point orchestrator
+├── output/                      # Generated artifacts (per-project)
+│   ├── BAMC_Roof_Truss/         # Example project folder
+│   │   ├── images/              # anastruct PNG plots for this project
+│   │   └── structural_report.md
+│   └── default/                 # Default project if no name given
+├── gui/                         # GUI experiments (anastruct_gui, app, etc.)
+├── notebooks/                   # Jupyter notebooks
+├── archive/                     # Old scripts, tests, investigations, misc
+├── vendor/                      # Third-party library experiments
+├── .agents/                     # Agent skills
+└── requirements.txt
+```
 
-These are used frequently in the codebase:
-
-| Conversion | Factor | Usage |
-| --- | --- | --- |
-| Area: in² → m² | `× 0.00064516` | `EA = Area_in2 * 0.00064516 * 200e9` |
-| Inertia: in⁴ → m⁴ | `× 4.1623e-7` | `EI = Ix_in4 * 4.1623e-7 * 200e9` |
-| Force: kN → kips | `× 0.224809` | AISC checks use kips |
-| Length: m → in | `× 39.3701` | AISC checks use inches |
-| Weight: plf (lb/ft) → kg/m | `× 1.488` | For mass estimation |
+7. **Run command**: `python -m src.simulate_full_system <project_name>` from the project root (`ASEP/`).
+   - Example: `python -m src.simulate_full_system BAMC_Roof_Truss`
+   - Omitting the project name defaults to `"default"`
+   - Each run creates `output/<project_name>/images/` and `output/<project_name>/structural_report.md`
+8. **Imports within `src/`**: All cross-module imports MUST use relative imports (e.g., `from .optimizer import ...`, `from .aisc_database import aisc_db`).
+9. **Path resolution**: Modules that need to access `data/` or `output/` directories use `_PROJECT_ROOT`:
+   ```python
+   import os
+   _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+   db_path = os.path.join(_PROJECT_ROOT, 'data', 'aisc-shapes-database-v160-2.xlsx')
+   output_dir = os.path.join(_PROJECT_ROOT, 'output', project_name)
+   ```
 
 ---
 

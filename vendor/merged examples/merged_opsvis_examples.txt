@@ -1,0 +1,713 @@
+# === START: ex_2d_portal_frame.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_2d_portal_frame.html
+
+import openseespy.opensees as ops
+import opsvis as opsv
+
+import matplotlib.pyplot as plt
+
+ops.wipe()
+ops.model('basic', '-ndm', 2, '-ndf', 3)
+
+colL, girL = 4., 6.
+
+Acol, Agir = 2.e-3, 6.e-3
+IzCol, IzGir = 1.6e-5, 5.4e-5
+
+E = 200.e9
+
+Ep = {1: [E, Acol, IzCol],
+     2: [E, Acol, IzCol],
+     3: [E, Agir, IzGir]}
+
+ops.node(1, 0., 0.)
+ops.node(2, 0., colL)
+ops.node(3, girL, 0.)
+ops.node(4, girL, colL)
+
+ops.fix(1, 1, 1, 1)
+ops.fix(3, 1, 1, 0)
+
+opsv.plot_model()
+plt.title('plot_model before defining elements')
+
+ops.geomTransf('Linear', 1)
+
+# columns
+ops.element('elasticBeamColumn', 1, 1, 2, Acol, E, IzCol, 1)
+ops.element('elasticBeamColumn', 2, 3, 4, Acol, E, IzCol, 1)
+# girder
+ops.element('elasticBeamColumn', 3, 2, 4, Agir, E, IzGir, 1)
+
+Px = 2.e+3
+Wy = -10.e+3
+Wx = 0.
+
+Ew = {3: ['-beamUniform', Wy, Wx]}
+
+ops.timeSeries('Constant', 1)
+ops.pattern('Plain', 1, 1)
+ops.load(2, Px, 0., 0.)
+
+for etag in Ew:
+   ops.eleLoad('-ele', etag, '-type', Ew[etag][0], Ew[etag][1],
+               Ew[etag][2])
+
+ops.constraints('Transformation')
+ops.numberer('RCM')
+ops.system('BandGeneral')
+ops.test('NormDispIncr', 1.0e-6, 6, 2)
+ops.algorithm('Linear')
+ops.integrator('LoadControl', 1)
+ops.analysis('Static')
+ops.analyze(1)
+
+ops.printModel()
+
+opsv.plot_model()
+plt.title('plot_model after defining elements')
+
+opsv.plot_load()
+
+opsv.plot_reactions()
+
+# sfac = 80.
+
+opsv.plot_defo()
+# opsv.plot_defo(sfac)
+# fmt_interp = {'color': 'blue', 'linestyle': 'solid', 'linewidth': 1.2, 'marker': '.', 'markersize': 6}
+# opsv.plot_defo(sfac, fmt_interp=fmt_interp)
+
+# 4. plot N, V, M forces diagrams
+
+sfacN, sfacV, sfacM = 5.e-5, 5.e-5, 5.e-5
+
+opsv.section_force_diagram_2d('N', sfacN)
+plt.title('Axial force distribution')
+
+opsv.section_force_diagram_2d('T', sfacV)
+plt.title('Shear force distribution')
+
+opsv.section_force_diagram_2d('M', sfacM)
+plt.title('Bending moment distribution')
+
+plt.show()
+
+exit()
+
+# === END: ex_2d_portal_frame.py ===
+
+# === START: ex_2d_portal_frame_th_mode_anim.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_2d_portal_frame_th_mode_anim.html
+
+import openseespy.opensees as ops
+import opsvis as opsv
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# input_parameters = (3.8, 50., 100.)
+# input_parameters = (53.5767, 50., 100.)
+input_parameters = (20.8, 300., 8.)
+# input_parameters = (70.0, 500., 2.)
+
+pf, sfac_a, tkt = input_parameters
+
+ops.wipe()
+ops.model('basic', '-ndm', 2, '-ndf', 3)  # frame 2D
+
+colL, girL = 4., 6.
+
+Acol, Agir = 0.06, 0.06
+IzCol, IzGir = 0.0002, 0.0002
+
+E = 3.2e10
+rho = 2400.
+muCol = rho * Acol
+muGir = rho * Agir
+massCol = ['-mass', muCol, '-cMass']
+massGir = ['-mass', muGir, '-cMass']
+
+ops.node(0, 0.0, 0.0)
+ops.node(1, 0.0, 2.0)
+ops.node(2, 0.0, 4.0)
+ops.node(3, 3.0, 4.0)
+ops.node(4, 6.0, 4.0)
+ops.node(5, 6.0, 2.0)
+ops.node(6, 6.0, 0.0)
+
+ops.fix(0, 1, 1, 1)
+ops.fix(6, 1, 1, 0)
+
+gTTag = 1
+ops.geomTransf('Linear', gTTag)
+
+# 1st column
+ops.element('elasticBeamColumn', 1, 0, 1, Acol, E, IzCol, gTTag, *massCol)
+ops.element('elasticBeamColumn', 2, 1, 2, Acol, E, IzCol, gTTag, *massCol)
+# girder
+ops.element('elasticBeamColumn', 3, 2, 3, Agir, E, IzGir, gTTag, *massGir)
+ops.element('elasticBeamColumn', 4, 3, 4, Agir, E, IzGir, gTTag, *massGir)
+# 2nd column
+ops.element('elasticBeamColumn', 5, 4, 5, Acol, E, IzCol, gTTag, *massCol)
+ops.element('elasticBeamColumn', 6, 5, 6, Acol, E, IzCol, gTTag, *massCol)
+
+t0 = 0.
+tk = 1.
+Tp = 1/pf
+P0 = 15000.
+dt = 0.002
+n_steps = int((tk-t0)/dt)
+
+tsTag = 1
+ops.timeSeries('Trig', tsTag, t0, tk, Tp, '-factor', P0)
+
+patTag = 1
+ops.pattern('Plain', patTag, tsTag)
+ops.load(1, 1., 0., 0.)
+
+ops.constraints('Transformation')
+ops.numberer('RCM')
+ops.test('NormDispIncr', 1.0e-6, 10, 1)
+ops.algorithm('Linear')
+ops.system('ProfileSPD')
+ops.integrator('Newmark', 0.5, 0.25)
+ops.analysis('Transient')
+
+el_tags = ops.getEleTags()
+
+nels = len(el_tags)
+
+Eds = np.zeros((n_steps, nels, 6))
+timeV = np.zeros(n_steps)
+
+# transient analysis loop and collecting the data
+for step in range(n_steps):
+   ops.analyze(1, dt)
+   timeV[step] = ops.getTime()
+   # collect disp for element nodes
+   for el_i, ele_tag in enumerate(el_tags):
+       nd1, nd2 = ops.eleNodes(ele_tag)
+       Eds[step, el_i, :] = [ops.nodeDisp(nd1)[0],
+                             ops.nodeDisp(nd1)[1],
+                             ops.nodeDisp(nd1)[2],
+                             ops.nodeDisp(nd2)[0],
+                             ops.nodeDisp(nd2)[1],
+                             ops.nodeDisp(nd2)[2]]
+
+fmt_defo = {'color': 'blue', 'linestyle': 'solid', 'linewidth': 3.0,
+           'marker': '', 'markersize': 6}
+
+# 1. animate the deformated shape
+anim = opsv.anim_defo(Eds, timeV, sfac_a, fmt_defo=fmt_defo,
+                     xlim=[-1, 7], ylim=[-1, 5], fig_wi_he=(30., 22.))
+
+plt.show()
+
+# 2. after closing the window, animate the specified mode shape
+eigVals = ops.eigen(5)
+
+modeNo = 2  # specify which mode to animate
+f_modeNo = np.sqrt(eigVals[modeNo-1])/(2*np.pi)  # i-th natural frequency
+
+anim = opsv.anim_mode(modeNo, fmt_defo=fmt_defo,
+                     xlim=[-1, 7], ylim=[-1, 5], fig_wi_he=(30., 22.))
+plt.title(f'Mode {modeNo}, f_{modeNo}: {f_modeNo:.3f} Hz')
+
+plt.show()
+
+# === END: ex_2d_portal_frame_th_mode_anim.py ===
+
+# === START: ex_2d_ssi_portal_frame.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_2d_ssi_portal_frame.html
+
+import openseespy.opensees as ops
+import opsvis as opsv
+import matplotlib.pyplot as plt
+
+ops.model('basic', '-ndm', 2, '-ndf', 2)
+
+Ls, Hs = 10, 4
+nx, ny = Ls, Hs
+E0, Ec, Es = 1000, 20.e6, 200.e6
+
+b, h = .2, .3
+A, Iz, As, c = b*h, b*h**3./12., 0.0002, 0.025
+y1, z1 = h/2., b/2.
+nFibZ, nFib = 1, 20
+
+sec_tag, nip, beam_integ_tag, transf_tag = 1, 5, 1, 1
+mat0_tag, mat1_tag, mat2_tag = 1, 2, 3
+
+ops.nDMaterial('ElasticIsotropic', mat0_tag, E0, .3)
+ops.uniaxialMaterial('Elastic', mat1_tag, Ec)
+ops.uniaxialMaterial('Elastic', mat2_tag, Es)
+
+ops.block2D(nx, ny, 1, 1, 'quad', mat0_tag, 'PlaneStress', 1,
+           1, 0., 0.,
+           2, Ls, 0.,
+           3, Ls, Hs,
+           4, 0., Hs)
+
+ops.fixY(0., 1, 1); ops.fixX(0., 1, 0); ops.fixX(Ls, 1, 0)
+
+ops.model('basic', '-ndm', 2, '-ndf', 3)
+
+ops.node(100, 2., 4.); ops.node(101, 2., 8.)
+ops.node(102, 1., 4.); ops.node(103, 3., 4.)
+ops.node(110, 8., 4.); ops.node(111, 8., 8.)
+ops.node(112, 7., 4.); ops.node(113, 9., 4.)
+
+ops.equalDOF(46, 102, 1, 2); ops.equalDOF(47, 100, 1, 2)
+ops.equalDOF(48, 103, 1, 2); ops.equalDOF(52, 112, 1, 2)
+ops.equalDOF(53, 110, 1, 2); ops.equalDOF(54, 113, 1, 2)
+
+fib_sec_1 = [['section', 'Fiber', sec_tag, '-GJ', 1.0e6],
+            ['patch', 'rect', mat1_tag, nFib, nFibZ, -y1, -z1, y1, z1],
+            ['layer', 'straight', mat2_tag, 3, As, y1-c, z1-c, y1-c, c-z1],
+            ['layer', 'straight', mat2_tag, 3, As, c-y1, z1-c, c-y1, c-z1]
+            ]
+
+matcolor = ['r', 'gold', 'w']
+opsv.plot_fiber_section(fib_sec_1, matcolor=matcolor)
+plt.axis('equal')
+
+opsv.fib_sec_list_to_cmds(fib_sec_1)
+
+ops.beamIntegration('Lobatto', beam_integ_tag, sec_tag, nip)
+
+ops.geomTransf('Linear', transf_tag)
+ops.element('elasticBeamColumn', 101, 100, 101, A, Ec, Iz, 1)
+ops.element('elasticBeamColumn', 111, 110, 111, A, Ec, Iz, 1)
+
+ops.element('forceBeamColumn', 121, 101, 111, transf_tag, beam_integ_tag)
+
+ops.element('elasticBeamColumn', 103, 102, 100, A, Ec, Iz, transf_tag)
+ops.element('elasticBeamColumn', 104, 100, 103, A, Ec, Iz, transf_tag)
+
+ops.element('elasticBeamColumn', 113, 112, 110, A, Ec, Iz, transf_tag)
+ops.element('elasticBeamColumn', 114, 110, 113, A, Ec, Iz, transf_tag)
+
+Px, Py, Wy = 15., 2., -3.
+
+ops.timeSeries('Linear', 1)
+ops.pattern('Plain', 1, 1)
+ops.load(101, Px, -Py, 0.)
+
+ops.eleLoad('-ele', 121, '-type', '-beamUniform', Wy)
+
+ops.analysis('Static')
+ops.analyze(1)
+
+opsv.plot_model()
+opsv.plot_load()
+
+opsv.plot_defo(node_supports=0)
+plt.title('opsv.plot_defo(node_supports=0)')
+
+sfac = 20.
+
+_, ax = opsv.plot_defo(unDefoFlag=0, node_supports=0, sfac=sfac)
+opsv.plot_stress('sxx', sfac=sfac, ax=ax)
+plt.title('Stress sxx')
+
+_, ax = opsv.plot_defo(unDefoFlag=0, node_supports=0, sfac=sfac)
+opsv.plot_stress('syy', sfac=sfac, ax=ax)
+plt.title('Stress syy')
+
+_, ax = opsv.plot_defo(unDefoFlag=0, node_supports=0, sfac=sfac)
+opsv.plot_stress('sxy', sfac=sfac, ax=ax)
+plt.title('Stress sxy')
+
+_, ax = opsv.plot_defo(unDefoFlag=0, node_supports=0, sfac=sfac)
+opsv.plot_stress('vmis', sfac=sfac, ax=ax)
+plt.title('Stress vmis')
+
+opsv.section_force_diagram_2d('M', 1.e-1, number_format='.1f')
+plt.title('Bending moment distribution')
+
+plt.show()
+
+# === END: ex_2d_ssi_portal_frame.py ===
+
+# === START: ex_3d_3el_cantilever.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_3d_3el_cantilever.html
+
+import openseespy.opensees as ops
+import opsvis as opsv
+
+import matplotlib.pyplot as plt
+
+ops.wipe()
+
+ops.model('basic', '-ndm', 3, '-ndf', 6)
+
+b = 0.2
+h = 0.4
+
+A, Iz, Iy, J = 0.04, 0.0010667, 0.0002667, 0.01172
+
+E = 25.0e6
+G = 9615384.6
+
+# Lx, Ly, Lz = 4., 3., 5.
+Lx, Ly, Lz = 4., 4., 4.
+
+ops.node(1, 0., 0., 0.)
+ops.node(2, 0., 0., Lz)
+ops.node(3, Lx, 0., Lz)
+ops.node(4, Lx, Ly, Lz)
+
+ops.fix(1, 1, 1, 1, 1, 1, 1)
+
+lmass = 200.
+
+ops.mass(2, lmass, lmass, lmass, 0.001, 0.001, 0.001)
+ops.mass(3, lmass, lmass, lmass, 0.001, 0.001, 0.001)
+ops.mass(4, lmass, lmass, lmass, 0.001, 0.001, 0.001)
+
+gTTagz = 1
+gTTagx = 2
+gTTagy = 3
+
+coordTransf = 'Linear'
+ops.geomTransf(coordTransf, gTTagz, 0., -1., 0.)
+ops.geomTransf(coordTransf, gTTagx, 0., -1., 0.)
+ops.geomTransf(coordTransf, gTTagy, 1., 0., 0.)
+
+ops.element('elasticBeamColumn', 1, 1, 2, A, E, G, J, Iy, Iz, gTTagz)
+ops.element('elasticBeamColumn', 2, 2, 3, A, E, G, J, Iy, Iz, gTTagx)
+ops.element('elasticBeamColumn', 3, 3, 4, A, E, G, J, Iy, Iz, gTTagy)
+
+Ew = {}
+
+Px = -4.e1
+Py = -2.5e1
+Pz = -3.e1
+
+ops.timeSeries('Constant', 1)
+ops.pattern('Plain', 1, 1)
+ops.load(4, Px, Py, Pz, 0., 0., 0.)
+
+ops.constraints('Transformation')
+ops.numberer('RCM')
+ops.system('BandGeneral')
+ops.test('NormDispIncr', 1.0e-6, 6, 2)
+ops.algorithm('Linear')
+ops.integrator('LoadControl', 1)
+ops.analysis('Static')
+ops.analyze(1)
+
+
+opsv.plot_model()
+
+sfac = 2.0e0
+
+# fig_wi_he = 22., 14.
+fig_wi_he = 30., 20.
+
+# - 1
+nep = 9
+opsv.plot_defo(sfac, nep, az_el=(-68., 39.),
+              fig_wi_he=fig_wi_he, endDispFlag=0)
+
+plt.title('3d 3-element cantilever beam')
+
+# - 2
+opsv.plot_defo(sfac, 19, az_el=(6., 30.), fig_wi_he=fig_wi_he)
+
+plt.title('3d 3-element cantilever beam')
+
+# - 3
+nfreq = 6
+eigValues = ops.eigen(nfreq)
+
+modeNo = 6
+
+sfac = 2.0e1
+opsv.plot_mode_shape(modeNo, sfac, 19, az_el=(106., 46.),
+                    fig_wi_he=fig_wi_he)
+plt.title(f'Mode {modeNo}')
+
+sfacN = 1.e-2
+sfacVy = 5.e-2
+sfacVz = 1.e-2
+sfacMy = 1.e-2
+sfacMz = 1.e-2
+sfacT = 1.e-2
+
+# plt.figure()
+opsv.section_force_diagram_3d('N', sfacN)
+plt.title('Axial force N')
+
+opsv.section_force_diagram_3d('Vy', sfacVy)
+plt.title('Transverse force Vy')
+
+opsv.section_force_diagram_3d('Vz', sfacVz)
+plt.title('Transverse force Vz')
+
+opsv.section_force_diagram_3d('My', sfacMy)
+plt.title('Bending moments My')
+
+opsv.section_force_diagram_3d('Mz', sfacMz)
+plt.title('Bending moments Mz')
+
+opsv.section_force_diagram_3d('T', sfacT)
+plt.title('Torsional moment T')
+
+# just for demonstration,
+# the section data below does not match the data in OpenSees model above
+# For now it can be source of inconsistency because OpenSees has
+# not got functions to return section dimensions.
+# A workaround is to have own Python helper functions to reuse data
+# specified once
+ele_shapes = {1: ['circ', [h]],
+             2: ['rect', [b, h]],
+             3: ['I', [b, h, b/10., h/6.]]}
+opsv.plot_extruded_shapes_3d(ele_shapes, fig_wi_he=fig_wi_he)
+
+plt.show()
+
+exit()
+
+# === END: ex_3d_3el_cantilever.py ===
+
+# === START: ex_plot_fiber_section.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_plot_fiber_section.html
+
+import openseespy.opensees as ops
+# import opensees as ops  # local compilation
+import opsvis as opsv
+
+import matplotlib.pyplot as plt
+
+ops.wipe()
+ops.model('basic', '-ndm', 2, '-ndf', 3)  # frame 2D
+
+# 1. rotated steel shape
+
+fib_sec_1 = [['section', 'Fiber', 1, '-GJ', 1.0e6],
+            ['patch', 'quad', 1, 4, 1,  0.032, 0.317, -0.311, 0.067, -0.266, 0.005, 0.077, 0.254],
+            ['patch', 'quad', 1, 1, 4,  -0.075, 0.144, -0.114, 0.116, 0.075, -0.144, 0.114, -0.116],
+            ['patch', 'quad', 1, 4, 1,  0.266, -0.005,  -0.077, -0.254,  -0.032, -0.317,  0.311, -0.067]
+            ]
+
+# fib_sec_1 list can be used both for plotting and OpenSees commands defining
+# the actual fiber section in the OpenSees domain. Normally you would have to
+# use regular section('Fiber', ...), fiber(), layer(), patch() commands with
+# the same data to define the fiber section. However do not use both
+# ways in the same model.
+
+# opsv.fib_sec_list_to_cmds(fib_sec_1)
+
+# 2. RC section
+
+Bcol = 0.711
+Hcol = Bcol
+
+c = 0.076  # cover
+
+y1col = Hcol/2.0
+z1col = Bcol/2.0
+
+y2col = 0.5*(Hcol-2*c)/3.0
+
+nFibZ = 1
+nFib = 20
+nFibCover, nFibCore = 2, 16
+As9 = 0.0006446
+
+fib_sec_2 = [['section', 'Fiber', 3, '-GJ', 1.0e6],
+            ['patch', 'rect', 2, nFibCore, nFibZ, c-y1col, c-z1col, y1col-c, z1col-c],
+            ['patch', 'rect', 3, nFib, nFibZ, -y1col, -z1col, y1col, c-z1col],
+            ['patch', 'rect', 3, nFib, nFibZ, -y1col, z1col-c, y1col, z1col],
+            ['patch', 'rect', 3, nFibCover, nFibZ, -y1col, c-z1col, c-y1col, z1col-c],
+            ['patch', 'rect', 3, nFibCover, nFibZ, y1col-c, c-z1col, y1col, z1col-c],
+            ['layer', 'straight', 4, 4, As9, y1col-c, z1col-c, y1col-c, c-z1col],
+            ['layer', 'straight', 4, 2, As9, y2col, z1col-c, y2col, c-z1col],
+            ['layer', 'straight', 4, 2, As9, -y2col, z1col-c, -y2col, c-z1col],
+            ['layer', 'straight', 4, 4, As9, c-y1col, z1col-c, c-y1col, c-z1col]]
+
+
+# opsv.fib_sec_list_to_cmds(fib_sec_2)
+
+matcolor = ['r', 'lightgrey', 'gold', 'w', 'w', 'w']
+opsv.plot_fiber_section(fib_sec_1, matcolor=matcolor)
+plt.axis('equal')
+# plt.savefig('fibsec_wshape.png')
+
+matcolor = ['r', 'lightgrey', 'gold', 'w', 'w', 'w']
+opsv.plot_fiber_section(fib_sec_2, matcolor=matcolor)
+plt.axis('equal')
+# plt.savefig('fibsec_rc.png')
+
+# 3. circular cross-section
+nc1, nr1 = 8, 3
+nc2, nr2 = 8, 2
+ri1, re1 = 0.1, 0.2
+ri2, re2 = 0.2, 0.25
+a_beg, a_end = 0., 360.
+rbar3 = 0.225
+a_beg2, a_end2 = 0., 360.
+
+fib_sec_3 = [['section', 'Fiber', 1, '-GJ', 1.0e6],
+            ['patch', 'circ', 2, nc1, nr1, 0., 0., ri1, re1, a_beg, a_end],
+            ['patch', 'circ', 3, nc2, nr2, 0., 0., ri2, re2, a_beg, a_end],
+            ['layer', 'circ', 4, 6, As9, 0., 0., rbar3, a_beg2, a_end2],
+            ]
+
+
+matcolor = ['r', 'lightgrey', 'gold', 'w', 'w', 'w']
+opsv.plot_fiber_section(fib_sec_3, matcolor=matcolor)
+plt.axis('equal')
+# plt.savefig('fibsec_circ.png')
+
+plt.show()
+
+# === END: ex_plot_fiber_section.py ===
+
+# === START: ex_quads_4x4.py ===
+
+# Script content scraped from: https://opsvis.readthedocs.io/en/latest/ex_quads_4x4.html
+
+import openseespy.opensees as ops
+import opsvis as opsv
+
+import matplotlib.pyplot as plt
+
+ops.wipe()
+ops.model('basic', '-ndm', 2, '-ndf', 2)
+ops.node(1, 0., 0.)
+ops.node(2, 0., 1.)
+ops.node(3, 0., 2.)
+ops.node(4, 0., 3.)
+ops.node(5, 0., 4.)
+ops.node(6, 1., 0.)
+ops.node(7, 1., 1.)
+ops.node(8, 1., 2.)
+ops.node(9, 1., 3.)
+ops.node(10, 1., 4.)
+ops.node(11, 2., 0.)
+ops.node(12, 2., 1.)
+ops.node(13, 2., 2.)
+ops.node(14, 2., 3.)
+ops.node(15, 2., 4.)
+ops.node(16, 3., 0.)
+ops.node(17, 3., 1.)
+ops.node(18, 3., 2.)
+ops.node(19, 3., 3.)
+ops.node(20, 3., 4.)
+ops.node(21, 4., 0.)
+ops.node(22, 4., 1.)
+ops.node(23, 4., 2.)
+ops.node(24, 4., 3.)
+ops.node(25, 4., 4.)
+
+ops.nDMaterial('ElasticIsotropic', 1, 1000, 0.3)
+
+ops.element('quad', 1, 1, 6, 7, 2, 1, 'PlaneStress', 1)
+ops.element('quad', 2, 2, 7, 8, 3, 1, 'PlaneStress', 1)
+ops.element('quad', 3, 3, 8, 9, 4, 1, 'PlaneStress', 1)
+ops.element('quad', 4, 4, 9, 10, 5, 1, 'PlaneStress', 1)
+ops.element('quad', 5, 6, 11, 12, 7, 1, 'PlaneStress', 1)
+ops.element('quad', 6, 7, 12, 13, 8, 1, 'PlaneStress', 1)
+ops.element('quad', 7, 8, 13, 14, 9, 1, 'PlaneStress', 1)
+ops.element('quad', 8, 9, 14, 15, 10, 1, 'PlaneStress', 1)
+ops.element('quad', 9, 11, 16, 17, 12, 1, 'PlaneStress', 1)
+ops.element('quad', 10, 12, 17, 18, 13, 1, 'PlaneStress', 1)
+ops.element('quad', 11, 13, 18, 19, 14, 1, 'PlaneStress', 1)
+ops.element('quad', 12, 14, 19, 20, 15, 1, 'PlaneStress', 1)
+ops.element('quad', 13, 16, 21, 22, 17, 1, 'PlaneStress', 1)
+ops.element('quad', 14, 17, 22, 23, 18, 1, 'PlaneStress', 1)
+ops.element('quad', 15, 18, 23, 24, 19, 1, 'PlaneStress', 1)
+ops.element('quad', 16, 19, 24, 25, 20, 1, 'PlaneStress', 1)
+
+ops.fix(1, 1, 1)
+ops.fix(6, 1, 1)
+ops.fix(11, 1, 1)
+ops.fix(16, 1, 1)
+ops.fix(21, 1, 1)
+
+ops.equalDOF(2, 22, 1, 2)
+ops.equalDOF(3, 23, 1, 2)
+ops.equalDOF(4, 24, 1, 2)
+ops.equalDOF(5, 25, 1, 2)
+
+ops.timeSeries('Linear', 1)
+ops.pattern('Plain', 1, 1)
+ops.load(15, 0., -1.)
+
+ops.analysis('Static')
+ops.analyze(1)
+
+# - plot model
+opsv.plot_model()
+plt.axis('equal')
+
+# plt.figure()
+opsv.plot_load()
+
+# - plot deformation
+opsv.plot_defo(unDefoFlag=1)
+plt.axis('equal')
+
+jstr = 'sxx'
+plt.figure()
+opsv.plot_stress(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+jstr = 'syy'
+plt.figure()
+opsv.plot_stress(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+jstr = 'sxy'
+plt.figure()
+opsv.plot_stress(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+jstr = 'vmis'
+plt.figure()
+opsv.plot_stress(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+
+jstr = 'exx'
+plt.figure()
+opsv.plot_strain(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+jstr = 'eyy'
+plt.figure()
+opsv.plot_strain(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+jstr = 'exy'
+plt.figure()
+opsv.plot_strain(jstr)
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.title(f'{jstr}')
+
+plt.show()
+
+exit()
+
+# === END: ex_quads_4x4.py ===
