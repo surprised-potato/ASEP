@@ -1,24 +1,24 @@
 # Gable Roof Structural Analysis Report
 
 ## 1. Frame Geometry & Loads
-- **Span:** `21.0 m`
+- **Span:** `20.0 m`
 - **Column Height:** `6.0 m`
-- **Max Vertical Deflection:** `7.41 mm` (Limit: 87.50 mm)
+- **Max Vertical Deflection:** `0.12 mm` (Limit: 83.33 mm)
 
 ## 2. Loading Data (NSCP 2015 Combinations)
-- **Frame Spacing:** `4.7 m` (Tributary Width)
-- **Dead Load (DL):** `0.9 kPa \times 4.7m = 4.23 kN/m`
-- **Roof Live Load (LR):** `0.6 kPa \times 4.7m = 2.82 kN/m`
-- **Governing Combination ($1.2D + 1.6L$):** `1.2(4.23) + 1.6(2.82) = 9.59 kN/m` (Applied as UDL)
+- **Frame Spacing:** `4.2 m` (Tributary Width)
+- **Dead Load (DL):** `0.9 kPa \times 4.2m = 3.78 kN/m`
+- **Roof Live Load (LR):** `0.6 kPa \times 4.2m = 2.52 kN/m`
+- **Governing Combination ($1.2D + 1.6L$):** `1.2(3.78) + 1.6(2.52) = 8.57 kN/m` (Applied as UDL)
 
-### Optimized Member Selection
-| Group | Selected W-Shape | Weight (plf) | Area (in²) | Ix (in⁴) |
+### Optimized Member Selection (AISC Chapter H Interaction)
+| Group | Selected W-Shape | Weight (plf) | Area (in²) | Interaction Ratio |
 | --- | --- | --- | --- | --- |
-| Beam | `W6X15` | 15.0 | 4.43 | 29.1 |
-| Column | `W6X8.5` | 8.5 | 2.52 | 14.9 |
+| Beam | `W21X48` | 48.0 | 14.10 | 0.95 |
+| Column | `W21X48` | 48.0 | 14.10 | 0.95 |
 
-- **Total Steel Weight (per frame):** `627.7 kg`
-- **Estimated Material Cost:** `PHP 40,802.24` (@ PHP 65/kg)
+- **Total Steel Weight (per frame):** `2307.6 kg`
+- **Estimated Material Cost:** `PHP 149,994.30` (@ PHP 65/kg)
 
 ## 2. Foundation Design (Base Plate, Pedestal & Footing)
 ### Base Plate Details
@@ -33,7 +33,7 @@
 | Parameter | Value |
 | --- | --- |
 | Dimensions | `500mm x 500mm` |
-| Vertical Load ($P_u$) | `98.24 kN` |
+| Vertical Load ($P_u$) | `83.26 kN` |
 | Vertical Reinforcement | `8 nos. 16mm \phi Bars` |
 | Lateral Ties | `10mm \phi @ 200mm o.c.` |
 | Concrete Strength ($f'_c$) | `21 MPa (3000 psi)` |

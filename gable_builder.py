@@ -2,7 +2,7 @@ from anastruct import SystemElements
 import numpy as np
 import math
 
-def build_gable_frame(span=21.0, height_col=6.0, pitch_deg=10.0, spacing=4.7, results_map=None):
+def build_gable_frame(span=20.0, height_col=6.0, pitch_deg=10.0, spacing=4.2, results_map=None):
     """
     Builds a gable frame using anastruct.
     
@@ -84,32 +84,17 @@ def get_max_axial_force(ss, element_ids):
     forces = [0.0]
     for eid in element_ids:
         try:
-            res = ss.get_element_results(eid)
-            # res can be None or a dict
-            if res and isinstance(res, dict) and 'N' in res:
-                # N is usually a list/array of 2 values (start, end)
-                forces.extend([abs(res['N'][0]), abs(res['N'][1])])
-            elif hasattr(ss, 'element_results') and ss.element_results:
-                # Fallback to direct attribute access if exist
-                er = ss.element_results.get(eid)
-                if er and 'N' in er:
-                    forces.extend([abs(er['N'][0]), abs(er['N'][1])])
-        except Exception as e:
-            pass # Silent failure to avoid crashing the loop
+            el = ss.element_map[eid]
+            forces.extend([abs(getattr(el, 'N_1', 0.0)), abs(getattr(el, 'N_2', 0.0))])
+        except Exception:
+            pass
     return max(forces)
 
 def get_max_moment(ss, element_ids):
     """Returns the maximum absolute moment in the given elements."""
-    moments = [0.0]
-    for eid in element_ids:
-        try:
-            res = ss.get_element_results(eid)
-            if res and isinstance(res, dict) and 'M' in res:
-                moments.extend([abs(res['M'][0]), abs(res['M'][1])])
-            elif hasattr(ss, 'element_results') and ss.element_results:
-                er = ss.element_results.get(eid)
-                if er and 'M' in er:
-                    moments.extend([abs(er['M'][0]), abs(er['M'][1])])
-        except Exception as e:
-            pass
-    return max(moments)
+    try:
+        moments = ss.get_element_result_range('moment')
+        if not moments: return 0.0
+        return max(abs(moments[eid - 1]) for eid in element_ids if eid - 1 < len(moments))
+    except Exception:
+        return 0.0

@@ -21,7 +21,7 @@ def generate_gable_report(gable_data):
     report.append(f"- **Max Vertical Deflection:** `{max_d*1000:.2f} mm` (Limit: {span/240*1000:.2f} mm)\n")
     
     report.append(f"## 2. Loading Data (NSCP 2015 Combinations)")
-    spacing = gable_data.get('spacing', 4.7)
+    spacing = gable_data.get('spacing', 5.0)
     q_dl_val = 0.9 * spacing
     q_lr_val = 0.6 * spacing
     q_ult = 1.2 * q_dl_val + 1.6 * q_lr_val
@@ -31,12 +31,12 @@ def generate_gable_report(gable_data):
     report.append(f"- **Roof Live Load (LR):** `0.6 kPa \\times {spacing:.1f}m = {q_lr_val:.2f} kN/m`")
     report.append(f"- **Governing Combination ($1.2D + 1.6L$):** `{1.2:.1f}({q_dl_val:.2f}) + {1.6:.1f}({q_lr_val:.2f}) = {q_ult:.2f} kN/m` (Applied as UDL)\n")
 
-    report.append("### Optimized Member Selection")
-    report.append("| Group | Selected W-Shape | Weight (plf) | Area (in²) | Ix (in⁴) |")
+    report.append("### Optimized Member Selection (AISC Chapter H Interaction)")
+    report.append("| Group | Selected W-Shape | Weight (plf) | Area (in²) | Interaction Ratio |")
     report.append("| --- | --- | --- | --- | --- |")
     for group in ['Beam', 'Column']:
         shape = results[group]
-        report.append(f"| {group} | `{shape['Label']}` | {shape['Weight']:.1f} | {shape['Area']:.2f} | {shape['Ix']:.1f} |")
+        report.append(f"| {group} | `{shape['Label']}` | {shape['Weight']:.1f} | {shape['Area']:.2f} | {shape['Capacity_Ratio']:.2f} |")
     
     report.append(f"\n- **Total Steel Weight (per frame):** `{gable_data['total_weight_kg']:.1f} kg`")
     report.append(f"- **Estimated Material Cost:** `PHP {gable_data['total_weight_kg'] * 65:,.2f}` (@ PHP 65/kg)\n")
@@ -102,7 +102,7 @@ def generate_gable_report(gable_data):
 
     # --- Plots ---
     # Re-build for plotting with exact parameters
-    ss, ids = build_gable_frame(span, gable_data['height_col'], spacing=gable_data.get('spacing', 4.7), results_map=results)
+    ss, ids = build_gable_frame(span, gable_data['height_col'], spacing=gable_data.get('spacing', 5.0), results_map=results)
     ss.solve()
     
     plot_configs = [
@@ -131,6 +131,6 @@ def generate_gable_report(gable_data):
     print("\n✅ Report generated: `gable_report.md`")
 
 if __name__ == "__main__":
-    # Run the optimization with user inputs (21m span, 6m height, 4.7m spacing)
-    data = run_gable_optimization(span=21.0, height_col=6.0, spacing=4.7)
+    # Run the optimization with user inputs (20m span, 6m height, 4.2m spacing)
+    data = run_gable_optimization(span=20.0, height_col=6.0, spacing=4.2)
     generate_gable_report(data)

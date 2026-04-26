@@ -129,6 +129,7 @@ Loads the Excel database (`aisc-shapes-database-v160-2.xlsx`) and provides filte
 - **Shape types supported**: `W`, `HSS`, `L`, `WT`, `2L`
 - **Capacity checks**: AISC Chapter E compression ($F_{cr}$, $\phi P_n$) and tension ($\phi P_n = 0.9 F_y A_g$)
 - **Slenderness limits**: $KL/r \leq 200$ (compression), $KL/r \leq 300$ (tension)
+- **Combined Interaction (AISC H1-1)**: Automatically evaluates $P/P_n + M/M_n$ interaction for combined axial and bending loads.
 - **Geometric width filtering** (`bf_max` parameter): Filters out shapes wider than a specified limit. Width is calculated differently per shape type:
   - `WT`: uses `bf` (flange width)
   - `L`: uses `max(b, d)` (outstanding leg dimension)
@@ -139,14 +140,14 @@ Loads the Excel database (`aisc-shapes-database-v160-2.xlsx`) and provides filte
 **Key methods:**
 ```python
 # Select all passing shapes, sorted lightest-first
-candidates = aisc_db.select_candidates(Pu_kN, L_m, family='L', bf_max=4.0)
+candidates = aisc_db.select_candidates(Pu_kN, L_m, family='L', bf_max=4.0, Mx_kN_m=10.0)
 
 # Select the single lightest passing shape
-shape = aisc_db.select_lightest(Pu_kN, L_m, family='WT', bf_max=None)
+shape = aisc_db.select_lightest(Pu_kN, L_m, family='WT', bf_max=None, Mx_kN_m=0.0)
 ```
 
 **Return dict keys per shape:**
-`Label`, `Weight` (plf), `Area` (in²), `Ix` (in⁴), `KL/r`, `Capacity_kN`, `bf_in`
+`Label`, `Weight` (plf), `Area` (in²), `Ix` (in⁴), `KL/r`, `Capacity_Ratio`, `bf_in`
 
 ---
 

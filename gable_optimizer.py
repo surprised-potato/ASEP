@@ -1,8 +1,8 @@
-from aisc_database import aisc_db
+from src.aisc_database import aisc_db
 from gable_builder import build_gable_frame, get_max_axial_force, get_max_moment
 import math
 
-def run_gable_optimization(span=21.0, height_col=6.0, pitch_deg=10.0, spacing=5.0, target_ltod=240, max_iter=10):
+def run_gable_optimization(span=20.0, height_col=6.0, pitch_deg=10.0, spacing=4.2, target_ltod=240, max_iter=10):
     """
     Iteratively optimizes the gable frame members (W-shapes).
     Assumes Beam and Column use W-shapes.
@@ -30,12 +30,12 @@ def run_gable_optimization(span=21.0, height_col=6.0, pitch_deg=10.0, spacing=5.
         # But we need to handle moment. Let's increase Pu for rough selection.
         # Equivalent Pu = Pu + (Mu * 12 / depth_approx)
         
-        # Initial sizing
-        new_col = aisc_db.select_lightest(pu_col * 1.5, height_col, family='W')
+        # Rigorous sizing using interaction checks
+        new_col = aisc_db.select_lightest(pu_col, height_col, family='W', Mx_kN_m=mu_col)
         # Beam length is eave to apex
         pitch_rad = math.radians(pitch_deg)
         beam_len = (span / 2.0) / math.cos(pitch_rad)
-        new_beam = aisc_db.select_lightest(pu_beam * 1.5, beam_len, family='W')
+        new_beam = aisc_db.select_lightest(pu_beam, beam_len, family='W', Mx_kN_m=mu_beam)
         
         if not new_col or not new_beam:
             print("Failed to find suitable I-beams.")
@@ -68,7 +68,7 @@ def run_gable_optimization(span=21.0, height_col=6.0, pitch_deg=10.0, spacing=5.
         if dy_m > delta_max:
             # Step up Ix by 20% to find next candidates
             target_ix_beam = results_map['Beam']['Ix'] * 1.2
-            candidates = aisc_db.select_candidates(pu_beam * 1.5, beam_len, family='W')
+            candidates = aisc_db.select_candidates(pu_beam, beam_len, family='W', Mx_kN_m=mu_beam)
             passing_ix = [c for c in candidates if c['Ix'] > target_ix_beam]
             if passing_ix:
                 new_beam = passing_ix[0]
@@ -100,5 +100,5 @@ def run_gable_optimization(span=21.0, height_col=6.0, pitch_deg=10.0, spacing=5.
     }
 
 if __name__ == "__main__":
-    res = run_gable_optimization(span=21.0, height_col=6.0, spacing=4.7)
+    res = run_gable_optimization(span=20.0, height_col=6.0, spacing=4.2)
     print(res)
