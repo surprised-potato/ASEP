@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>structural_report</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="structural_report_files/libs/clipboard/clipboard.min.js"></script>
+<script src="structural_report_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="structural_report_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="structural_report_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="structural_report_files/libs/quarto-html/popper.min.js"></script>
+<script src="structural_report_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="structural_report_files/libs/quarto-html/anchor.min.js"></script>
+<link href="structural_report_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="structural_report_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="structural_report_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="structural_report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="structural_report_files/libs/bootstrap/bootstrap-9e3ffae467580fdb927a41352e75a2e0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="pickleball-court-structural-optimization-report" class="level1">
+<h1>Pickleball Court — Structural Optimization Report</h1>
+<section id="truss-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="truss-configuration">1. Truss Configuration</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Span</td>
+<td><code>24.0 m</code></td>
+</tr>
+<tr class="even">
+<td>Depth</td>
+<td><code>2.0 m</code> (constant between chords)</td>
+</tr>
+<tr class="odd">
+<td>Center Rise</td>
+<td><code>3.0 m</code></td>
+</tr>
+<tr class="even">
+<td>Column Height</td>
+<td><code>6.0 m</code> (fixed base)</td>
+</tr>
+<tr class="odd">
+<td>Panels</td>
+<td><code>16 @ 1.5 m</code></td>
+</tr>
+<tr class="even">
+<td>Type</td>
+<td>Two-Slope (Gable) Symmetrical Pratt Truss</td>
+</tr>
+<tr class="odd">
+<td>Supports</td>
+<td>Fixed-base steel columns (2 nos.)</td>
+</tr>
+<tr class="even">
+<td>Steel Grade</td>
+<td><code>A36 (Fy = 36 ksi)</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="applied-loads" class="level2">
+<h2 class="anchored" data-anchor-id="applied-loads">2. Applied Loads</h2>
+<section id="gravity-loads" class="level3">
+<h3 class="anchored" data-anchor-id="gravity-loads">Gravity Loads</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Dead Load (Roof + Ceiling)</td>
+<td><code>3.0 kN/m</code> (0.5 kPa × 6m trib.)</td>
+</tr>
+<tr class="even">
+<td>Truss Self-Weight</td>
+<td><code>0.504 kN/m</code> (1606.7 kg / 24m)</td>
+</tr>
+<tr class="odd">
+<td><strong>Total Dead Load (D)</strong></td>
+<td><strong><code>3.504 kN/m</code></strong></td>
+</tr>
+<tr class="even">
+<td><strong>Live Load (L)</strong></td>
+<td><strong><code>3.600 kN/m</code></strong> (0.6 kPa × 6m trib.)</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="earthquake-static-method-nscp" class="level3">
+<h3 class="anchored" data-anchor-id="earthquake-static-method-nscp">Earthquake (Static Method — NSCP)</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Seismic Coefficient (<span class="math inline">\(C_s\)</span>)</td>
+<td><code>0.2</code> (Zone 4, Soil Type D, R=8.5)</td>
+</tr>
+<tr class="even">
+<td>Seismic Weight (<span class="math inline">\(W\)</span>)</td>
+<td><code>84.09 kN</code></td>
+</tr>
+<tr class="odd">
+<td>Base Shear (<span class="math inline">\(V = C_s \times W\)</span>)</td>
+<td><strong><code>16.82 kN</code></strong></td>
+</tr>
+<tr class="even">
+<td>Lateral q on each column (<span class="math inline">\(V / 2 / h\)</span>)</td>
+<td><code>1.40 kN/m</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="wind-load" class="level3">
+<h3 class="anchored" data-anchor-id="wind-load">Wind Load</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Wind Pressure</td>
+<td><code>800 Pa</code></td>
+</tr>
+<tr class="even">
+<td>Tributary Width</td>
+<td><code>6.0 m</code></td>
+</tr>
+<tr class="odd">
+<td>Lateral Load on Columns</td>
+<td><strong><code>4.8 kN/m</code></strong> (800 Pa × 6m)</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="load-case-summary" class="level2">
+<h2 class="anchored" data-anchor-id="load-case-summary">3. Load Case Summary</h2>
+<section id="axial-forces-kn-per-load-case" class="level3">
+<h3 class="anchored" data-anchor-id="axial-forces-kn-per-load-case">Axial Forces (kN) per Load Case</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Member Group</th>
+<th>LC1 — Gravity Only</th>
+<th>LC2 — Gravity + EQ</th>
+<th>LC3 — Gravity + Wind</th>
+<th><strong>Governing</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Top Chord</td>
+<td>-359.97</td>
+<td>-281.94</td>
+<td>-151.89</td>
+<td><strong>-359.97</strong></td>
+</tr>
+<tr class="even">
+<td>Bottom Chord</td>
+<td>348.59</td>
+<td>273.03</td>
+<td>147.09</td>
+<td><strong>348.59</strong></td>
+</tr>
+<tr class="odd">
+<td>Vertical Webs</td>
+<td>169.09</td>
+<td>132.44</td>
+<td>71.35</td>
+<td><strong>169.09</strong></td>
+</tr>
+<tr class="even">
+<td>Diagonal Webs</td>
+<td>-157.86</td>
+<td>-123.64</td>
+<td>-66.61</td>
+<td><strong>-157.86</strong></td>
+</tr>
+<tr class="odd">
+<td>Columns</td>
+<td>123.26</td>
+<td>96.54</td>
+<td>52.01</td>
+<td><strong>123.26</strong></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="support-reactions-per-load-case" class="level3">
+<h3 class="anchored" data-anchor-id="support-reactions-per-load-case">Support Reactions per Load Case</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Reaction</th>
+<th>LC1 — Gravity Only</th>
+<th>LC2 — Gravity + EQ</th>
+<th>LC3 — Gravity + Wind</th>
+<th><strong>Governing</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Vertical (<span class="math inline">\(F_y\)</span>)</td>
+<td>123.26</td>
+<td>96.54</td>
+<td>52.01</td>
+<td><strong>123.26</strong></td>
+</tr>
+<tr class="even">
+<td>Horizontal (<span class="math inline">\(F_x\)</span>)</td>
+<td>12.63</td>
+<td>18.30</td>
+<td>34.13</td>
+<td><strong>34.13</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote class="blockquote">
+<p><strong>Governing Vertical Reaction:</strong> <code>123.26 kN</code> (LC1: Gravity Only) <strong>Governing Horizontal Reaction:</strong> <code>34.13 kN</code> (LC3: Gravity + Wind)</p>
+</blockquote>
+</section>
+</section>
+<section id="deflection-check" class="level2">
+<h2 class="anchored" data-anchor-id="deflection-check">4. Deflection Check</h2>
+<ul>
+<li><strong>Max Deflection:</strong> <code>0.07 mm</code></li>
+<li><strong>Deflection Ratio (L/d):</strong> <code>359185</code> (Target &gt; 240) ✅ PASS</li>
+</ul>
+</section>
+<section id="optimized-member-selection-governing-forces" class="level2">
+<h2 class="anchored" data-anchor-id="optimized-member-selection-governing-forces">5. Optimized Member Selection (Governing Forces)</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 14%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Group</th>
+<th>Selected Shape</th>
+<th>Weight (plf)</th>
+<th>KL/r</th>
+<th>Gov.&nbsp;Force (kN)</th>
+<th>Capacity (kN)</th>
+<th>Governing LC</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Top Chord</td>
+<td><code>2L3-1/2X3X1/4LLBB</code></td>
+<td>10.8</td>
+<td>55.3</td>
+<td>-359.97</td>
+<td>387.62</td>
+<td>Gravity Only</td>
+</tr>
+<tr class="even">
+<td>Bottom Chord</td>
+<td><code>2L3X2-1/2X1/4LLBB</code></td>
+<td>9.0</td>
+<td>64.8</td>
+<td>348.59</td>
+<td>380.48</td>
+<td>Gravity Only</td>
+</tr>
+<tr class="odd">
+<td>Vertical Webs</td>
+<td><code>HSS3X1X3/16</code></td>
+<td>4.3</td>
+<td>207.2</td>
+<td>169.09</td>
+<td>171.51</td>
+<td>Gravity Only</td>
+</tr>
+<tr class="even">
+<td>Diagonal Webs</td>
+<td><code>HSS4.500X0.125</code></td>
+<td>5.8</td>
+<td>71.3</td>
+<td>-157.86</td>
+<td>176.38</td>
+<td>Gravity Only</td>
+</tr>
+<tr class="odd">
+<td>Columns</td>
+<td><code>W6X15</code></td>
+<td>15.0</td>
+<td>162.9</td>
+<td>123.26</td>
+<td>167.74</td>
+<td>Gravity Only</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Total Steel Weight:</strong> <code>1606.7 kg</code></li>
+<li><strong>Estimated Steel Cost:</strong> <code>PHP 96,399.89</code> (@ PHP 60/kg)</li>
+</ul>
+</section>
+<section id="substructure-design" class="level2">
+<h2 class="anchored" data-anchor-id="substructure-design">6. Substructure Design</h2>
+<p>Design assumptions:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Concrete Strength (<span class="math inline">\(f'_c\)</span>)</td>
+<td><code>21 MPa (3000 psi)</code></td>
+</tr>
+<tr class="even">
+<td>Rebar Yield Strength (<span class="math inline">\(f_y\)</span>)</td>
+<td><code>275 MPa (Grade 40)</code></td>
+</tr>
+<tr class="odd">
+<td>Allowable Soil Bearing (<span class="math inline">\(q_a\)</span>)</td>
+<td><code>100 kPa</code></td>
+</tr>
+<tr class="even">
+<td>Governing Vertical Reaction (<span class="math inline">\(P_u\)</span>)</td>
+<td><code>123.26 kN</code></td>
+</tr>
+<tr class="odd">
+<td>Governing Horizontal Reaction (<span class="math inline">\(H_u\)</span>)</td>
+<td><code>34.13 kN</code></td>
+</tr>
+</tbody>
+</table>
+<section id="steel-base-plate" class="level3">
+<h3 class="anchored" data-anchor-id="steel-base-plate">Steel Base Plate</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Column Shape</td>
+<td><code>W6X15</code> (d ≈ 152mm, bf ≈ 152mm)</td>
+</tr>
+<tr class="even">
+<td>Base Plate Dimensions (B × N)</td>
+<td><code>252 mm × 252 mm</code></td>
+</tr>
+<tr class="odd">
+<td>Base Plate Thickness (<span class="math inline">\(t_p\)</span>)</td>
+<td><code>10 mm</code></td>
+</tr>
+<tr class="even">
+<td>Actual Bearing Stress</td>
+<td><code>1.94 MPa</code> ≤ <code>11.60 MPa</code> (✅)</td>
+</tr>
+<tr class="odd">
+<td>Anchor Bolts</td>
+<td><code>4 — 16mm Ø</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="concrete-pedestal" class="level3">
+<h3 class="anchored" data-anchor-id="concrete-pedestal">Concrete Pedestal</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Dimensions</td>
+<td><code>400 mm × 400 mm × 600 mm</code></td>
+</tr>
+<tr class="even">
+<td>Main Reinforcement</td>
+<td><code>4 — 16mm Ø bars</code></td>
+</tr>
+<tr class="odd">
+<td>Lateral Ties</td>
+<td><code>10mm Ø @ 200mm O.C.</code></td>
+</tr>
+<tr class="even">
+<td>Anchor Bolts</td>
+<td><code>4 — 16mm Ø</code> (embedded 500mm)</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="isolated-square-footing" class="level3">
+<h3 class="anchored" data-anchor-id="isolated-square-footing">Isolated Square Footing</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Dimensions</td>
+<td><code>1.0 m × 1.0 m × 0.30 m</code></td>
+</tr>
+<tr class="even">
+<td>Actual Bearing Pressure</td>
+<td><code>82.2 kPa</code> ≤ <code>100 kPa</code> ✅</td>
+</tr>
+<tr class="odd">
+<td>Bottom Reinforcement</td>
+<td><code>12mm Ø @ 200mm O.C.</code> (Both Ways)</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="structural-plots" class="level2">
+<h2 class="anchored" data-anchor-id="structural-plots">7. Structural Plots</h2>
+<section id="structure-applied-loads-gravity" class="level4">
+<h4 class="anchored" data-anchor-id="structure-applied-loads-gravity">Structure &amp; Applied Loads (Gravity)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_structure.png" class="img-fluid figure-img"></p>
+<figcaption>Structure &amp; Applied Loads (Gravity)</figcaption>
+</figure>
+</div>
+</section>
+<section id="axial-forces-gravity" class="level4">
+<h4 class="anchored" data-anchor-id="axial-forces-gravity">Axial Forces (Gravity)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_axial.png" class="img-fluid figure-img"></p>
+<figcaption>Axial Forces (Gravity)</figcaption>
+</figure>
+</div>
+</section>
+<section id="deflection-gravity" class="level4">
+<h4 class="anchored" data-anchor-id="deflection-gravity">Deflection (Gravity)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_displacement.png" class="img-fluid figure-img"></p>
+<figcaption>Deflection (Gravity)</figcaption>
+</figure>
+</div>
+</section>
+<section id="support-reactions-gravity" class="level4">
+<h4 class="anchored" data-anchor-id="support-reactions-gravity">Support Reactions (Gravity)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_reactions.png" class="img-fluid figure-img"></p>
+<figcaption>Support Reactions (Gravity)</figcaption>
+</figure>
+</div>
+</section>
+<section id="structure-loads-wind-case" class="level4">
+<h4 class="anchored" data-anchor-id="structure-loads-wind-case">Structure &amp; Loads (Wind Case)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_wind_structure.png" class="img-fluid figure-img"></p>
+<figcaption>Structure &amp; Loads (Wind Case)</figcaption>
+</figure>
+</div>
+</section>
+<section id="axial-forces-wind-case" class="level4">
+<h4 class="anchored" data-anchor-id="axial-forces-wind-case">Axial Forces (Wind Case)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_wind_axial.png" class="img-fluid figure-img"></p>
+<figcaption>Axial Forces (Wind Case)</figcaption>
+</figure>
+</div>
+</section>
+<section id="reactions-wind-case" class="level4">
+<h4 class="anchored" data-anchor-id="reactions-wind-case">Reactions (Wind Case)</h4>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="images/pickleball_wind_reactions.png" class="img-fluid figure-img"></p>
+<figcaption>Reactions (Wind Case)</figcaption>
+</figure>
+</div>
+</section>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
