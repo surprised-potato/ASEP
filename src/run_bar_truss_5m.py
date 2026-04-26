@@ -97,7 +97,7 @@ def generate_building_truss_report(data_int, project_name="bar_5m"):
     with open(f"{output_dir}/truss_report.md", 'w', encoding='utf-8') as f:
         f.write("\n".join(report))
     
-    print(f"✅ Modified building truss report (5m spacing) generated: {output_dir}/truss_report.md")
+    print(f"[SUCCESS] Modified building truss report (5m spacing) generated: {output_dir}/truss_report.md")
 
 if __name__ == "__main__":
     print("Running Bar Project Truss Analysis (3 Interior Trusses @ 5.0m Spacing)...")
