@@ -34,4 +34,6 @@ Run this workflow at the start of a new conversation to load the full project co
    - Project directory layout
    - Available skills loaded
    - Existing project outputs found
-   - The run command: `python -m src.simulate_full_system <project_name>`
+   - Run commands:
+     - **Bar Project**: `python -m src.run_bar --project_name <name> --chord_family <L|2L|WT> --web_family <L|HSS>`
+     - **BAMC Legacy**: `python -m src.simulate_full_system <project_name>`

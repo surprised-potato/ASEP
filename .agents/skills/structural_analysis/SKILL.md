@@ -22,9 +22,10 @@ Before starting any analysis, the agent MUST interview the user to capture the f
     - **Wind**: Design wind speed or lateral pressure ($kPa$)
     - **Seismic**: Any specific regional requirements (if known)
 4.  **Material Preferences**:
-    - **Steel**: Preferred shapes (W, HSS, L, etc.) and grade.
+    - **Steel**: Preferred shapes (W, HSS, L, 2L, etc.) and grade.
     - **Concrete**: Support type (Pedestal, Wall, Footing type).
-5.  **Output Requirements**:
+5.  **Soil Data** (if available): Allowable bearing capacity ($kPa$), foundation depth ($m$).
+6.  **Output Requirements**:
     - Specific plots or reports required.
 
 ### Step 1: Planning...
@@ -46,10 +47,40 @@ Before starting any analysis, the agent MUST interview the user to capture the f
    ```
 4. **Node ID handling**: When extracting support reactions, `anastruct` may return `Node` objects or plain integer IDs depending on the version. Always use `nid = node.id if hasattr(node, 'id') else node` before calling `ss.get_node_results_system(nid)`.
 
+### Parameter Passing — Avoid Hardcoding
+
+5. **Never hardcode member family in the sizing loop.** Use `d['family']` from the `truss_groups` dict, not a literal like `family='2L'` or `family='HSS'`. This was a critical bug — the `chord_family` and `web_family` CLI arguments were ignored because the sizing functions hardcoded the family string.
+6. **Never hardcode load parameters.** Compute loads from unit pressures and tributary width:
+   ```python
+   trib_width = 5.0       # m — parameterize this
+   dl_q_kn_m = -(dl_kpa * trib_width)
+   ll_q_kn_m = -(ll_kpa * trib_width)
+   wind_q_kn_m = wind_kpa * trib_width
+   ```
+   Export `trib_width`, `dl_kpa`, `ll_kpa`, `wind_kpa` in the return dict so the report can label loads dynamically.
+7. **Never hardcode report labels.** Dynamic labels must pull from the data dict:
+   - Chord construction: detect from `res["Top Chord"]["Label"]` prefix (`L` → "Single Angles", `2L` → "Double Angles", etc.)
+   - Web construction: detect from `res["Vertical Webs"]["Label"]` prefix (`HSS` → "Pipe", `L` → "Single Angles")
+   - Load descriptions: use `trib_width`, `dl_kpa`, etc. from data dict, not literal strings like `"6m trib."`.
+
+### Capacity Value Chain (CRITICAL BUG FIX)
+
+8. **`check_shape()` must return `phi_Pn`.** The function computes axial capacity internally but originally returned only `(passes, ratio, klr)` — discarding the capacity. Fixed to return a 4-tuple: `(passes, ratio, klr, phi_Pn_kips)`.
+   - **ALL return paths** must return 4 values, including early-return failure paths:
+     ```python
+     if rmin <= 0: return False, 99.0, 999, 0.0  # <-- 4th value!
+     ```
+9. **`select_candidates()` must store `Capacity_kN`.** Convert from kips: `capacity_kN = phi_Pn_kips * 4.44822`.
+10. **RC columns use `phi_Pn_kN`** (from the column optimizer), not `Capacity_kN`. The report must fall back: `cap = shape.get('Capacity_kN') or shape.get('phi_Pn_kN', 0)`.
+
+### Windows Console Encoding
+
+11. **Avoid Unicode symbols in `print()` statements.** Windows cp1252 console encoding cannot render `φ`, `δ`, `×` etc. Use ASCII equivalents: `phiPn`, `delta_ns`, `x` in console output. Unicode is fine in the Markdown report (rendered by the editor/browser).
+
 ### Project Architecture
 
-5. **Avoid massive Notebook generation**: Do not use Python scripts to generate huge strings of Python code to write to `.ipynb` files. This causes `UnicodeEncodeError`, `NameError`, and string escaping nightmares.
-6. **Use a Modular CLI Approach**: The project follows a clean directory structure:
+12. **Avoid massive Notebook generation**: Do not use Python scripts to generate huge strings of Python code to write to `.ipynb` files. This causes `UnicodeEncodeError`, `NameError`, and string escaping nightmares.
+13. **Use a Modular CLI Approach**: The project follows a clean directory structure:
 
 ```
 ASEP/
@@ -58,29 +89,29 @@ ASEP/
 ├── src/                         # Core pipeline (Python package)
 │   ├── __init__.py
 │   ├── aisc_database.py         # Excel loading, AISC capacity math, width filtering
-│   ├── truss_builder.py         # anastruct geometry definitions and loads
-│   ├── optimizer.py              # Iterative scaling loop with geometric constraints
-│   ├── report_generator.py       # Markdown report + PNG plot generation
-│   └── simulate_full_system.py   # Entry point orchestrator
+│   ├── truss_builder.py         # BAMC/Longitudinal anastruct geometry
+│   ├── optimizer.py             # BAMC iterative scaling loop
+│   ├── report_generator.py      # BAMC Markdown report + PNG plots
+│   ├── simulate_full_system.py  # BAMC entry point
+│   ├── bar_builder.py           # Bar project Howe truss geometry (21m)
+│   ├── bar_optimizer.py         # Bar project iterative optimization + RC column sizing
+│   ├── bar_report.py            # Bar project Markdown report generator
+│   ├── run_bar.py               # Bar project CLI entry point
+│   ├── bar_truss_builder.py     # Alternative bar truss builder
+│   ├── bar_truss_optimizer.py   # Alternative bar optimizer
+│   └── run_bar_truss.py         # Alternative bar entry point
 ├── output/                      # Generated artifacts (per-project)
-│   ├── BAMC_Roof_Truss/         # Example project folder
-│   │   ├── images/              # anastruct PNG plots for this project
-│   │   └── structural_report.md
-│   └── default/                 # Default project if no name given
-├── gui/                         # GUI experiments (anastruct_gui, app, etc.)
+│   ├── bar_project_singles/     # Single angle (L) variant
+│   ├── Bar_Project_RC_Final/    # Double angle (2L) + HSS variant
+│   └── ...                      # Other project outputs
+├── gui/                         # GUI experiments
 ├── notebooks/                   # Jupyter notebooks
-├── archive/                     # Old scripts, tests, investigations, misc
-├── vendor/                      # Third-party library experiments
-├── .agents/                     # Agent skills
-└── requirements.txt
+├── archive/                     # Old scripts
+└── .agents/                     # Agent skills & workflows
 ```
 
-7. **Run command**: `python -m src.simulate_full_system <project_name>` from the project root (`ASEP/`).
-   - Example: `python -m src.simulate_full_system BAMC_Roof_Truss`
-   - Omitting the project name defaults to `"default"`
-   - Each run creates `output/<project_name>/images/` and `output/<project_name>/structural_report.md`
-8. **Imports within `src/`**: All cross-module imports MUST use relative imports (e.g., `from .optimizer import ...`, `from .aisc_database import aisc_db`).
-9. **Path resolution**: Modules that need to access `data/` or `output/` directories use `_PROJECT_ROOT`:
+14. **Imports within `src/`**: All cross-module imports MUST use relative imports (e.g., `from .optimizer import ...`, `from .aisc_database import aisc_db`).
+15. **Path resolution**: Modules that need to access `data/` or `output/` directories use `_PROJECT_ROOT`:
    ```python
    import os
    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -90,30 +121,43 @@ ASEP/
 
 ---
 
+## Run Commands
+
+### Bar Project (Howe Truss — Primary)
+```bash
+# All single angles (chords + webs)
+python -m src.run_bar --project_name bar_project_singles --chord_family L --web_family L
+
+# Double angles chords + HSS webs (original)
+python -m src.run_bar --project_name Bar_Project_RC_Final --chord_family 2L --web_family HSS
+
+# Mixed — any combination
+python -m src.run_bar --project_name <name> --chord_family <L|2L|WT> --web_family <L|HSS>
+```
+
+### BAMC / Longitudinal Truss (Legacy)
+```bash
+python -m src.simulate_full_system <project_name>
+```
+
+---
+
 ## Load Computation & Combinations
 
 ### 1. Line Load from Area Pressure (Load Computation)
 When converting area loads ($kN/m^2$ or $kPa$) to line loads ($kN/m$) for frame analysis, use the frame spacing (Tributary Width):
 $$w [kN/m] = p [kPa] \times Spacing [m]$$
 
-**Standard Methodology for Report Inclusion:**
-Include a "Loading Data" section in the report that explicitly shows:
-- **Dead Load ($DL$):** $0.9 kPa \times 4.7m = 4.23 kN/m$
-- **Wind Load ($WL$):** $0.9 kPa \times 4.7m = 4.23 kN/m$
-- **Load Proxy for Seismic:** $0.10 \times DL = 0.42 kN/m$
+**Always parameterize** — store `trib_width`, `dl_kpa`, `ll_kpa`, `wind_kpa` as named variables, not magic numbers.
 
 ### 2. Standard Load Combinations (NSCP/LRFD)
 Follow the National Structural Code of the Philippines (NSCP 2015) or LRFD patterns. Core combinations for steel analysis:
 
 | ID | Combination | Usage |
 | --- | --- | --- |
-| **LC1** | $1.4 D$ | Basic gravity (dead load only) |
-| **LC2** | $1.2 D + 1.6 L + 0.5 (L_r \text{ or } R)$ | Standard occupancy gravity |
-| **LC3** | $1.2 D + 1.0 W + L + 0.5 (L_r \text{ or } R)$ | Wind + Gravity |
-| **LC4** | $1.2 D + 1.0 E + L + 0.2 S$ | Seismic + Gravity |
-| **LC5** | $0.9 D + 1.0 W$ | Wind Uplift (Net suction) |
-
-*Note: In `anastruct`, build a `SystemElements` instance per load combination or use superposition for linear analysis.*
+| **LC1** | $1.2 D + 1.6 L$ | Standard gravity |
+| **LC2** | $1.2 D + 1.0 L + E$ | Gravity + Earthquake |
+| **LC3** | $1.2 D + W$ | Gravity + Wind |
 
 ---
 
@@ -130,40 +174,59 @@ Loads the Excel database (`aisc-shapes-database-v160-2.xlsx`) and provides filte
 - **Capacity checks**: AISC Chapter E compression ($F_{cr}$, $\phi P_n$) and tension ($\phi P_n = 0.9 F_y A_g$)
 - **Slenderness limits**: $KL/r \leq 200$ (compression), $KL/r \leq 300$ (tension)
 - **Combined Interaction (AISC H1-1)**: Automatically evaluates $P/P_n + M/M_n$ interaction for combined axial and bending loads.
-- **Geometric width filtering** (`bf_max` parameter): Filters out shapes wider than a specified limit. Width is calculated differently per shape type:
-  - `WT`: uses `bf` (flange width)
-  - `L`: uses `max(b, d)` (outstanding leg dimension)
-  - `2L`: uses `2*b + 0.375` (assumes 3/8" gusset plate gap)
-  - `W`: uses `bf` (flange width)
 - **Material**: Currently enforced as A36 steel ($F_y = 36$ ksi) for all shapes.
 
 **Key methods:**
 ```python
+# check_shape returns 4 values: (passes, ratio, klr, phi_Pn_kips)
+passes, ratio, klr, phi_Pn = aisc_db.check_shape(row, Pu_kips, L_in, Fy=36)
+
 # Select all passing shapes, sorted lightest-first
-candidates = aisc_db.select_candidates(Pu_kN, L_m, family='L', bf_max=4.0, Mx_kN_m=10.0)
+candidates = aisc_db.select_candidates(Pu_kN, L_m, family='L', bf_max=4.0)
 
 # Select the single lightest passing shape
-shape = aisc_db.select_lightest(Pu_kN, L_m, family='WT', bf_max=None, Mx_kN_m=0.0)
+shape = aisc_db.select_lightest(Pu_kN, L_m, family='WT')
 ```
 
 **Return dict keys per shape:**
-`Label`, `Weight` (plf), `Area` (in²), `Ix` (in⁴), `KL/r`, `Capacity_Ratio`, `bf_in`
+`Label`, `Weight` (plf), `Area` (in²), `Ix` (in⁴), `KL/r`, `Capacity_Ratio`, `Capacity_kN`, `bf_in`, `tw_in`
 
 ---
 
-### 2. Geometry Creation (`truss_builder.py`)
+### 2. Bar Project Pipeline (`bar_builder.py` → `bar_optimizer.py` → `bar_report.py`)
+
+**Entry point**: `run_bar.py` — CLI args: `--project_name`, `--chord_family`, `--web_family`
+
+**Optimization sequence** (`bar_optimizer.py`):
+1. **Phase 1: Iterative Member Sizing** (Factored 1.2D + 1.6L)
+   - Build truss → solve → extract forces → select lightest members → repeat until convergence (max 5 iterations)
+   - Chords sized with `select_lightest(family=d['family'])` — respects CLI arg
+   - Webs sized with `select_lightest(family=d['family'])` for `L`; rectangular-pipe filter for `HSS`
+2. **Phase 2: Deflection Check** (Service D + L)
+   - If L/δ < target, step up to next heavier chord candidate
+3. **Phase 3: Multi-Load-Case Analysis** (LC1 Gravity, LC2 Gravity+EQ, LC3 Gravity+Wind)
+   - Governs member sizing and reactions
+4. **Phase 4: RC Column Optimization** (`_optimize_rc_column()`)
+   - Iterates column sizes from 200mm up in 50mm increments
+   - Checks: Axial capacity (φPn ≥ Pu) AND slenderness (kLu/r ≤ 60)
+   - Computes moment magnification (δns) for slender columns
+   - Returns column dict with `h_mm`, `kLu_r`, `phi_Pn_kN`, `delta_ns`, `n_bars`, `bar_dia`
+
+**Report generation** (`bar_report.py`):
+- All labels are dynamic (chord type, web type, loads, column sizes, reinforcement)
+- Footing sized from `qa` (soil bearing) with minimum = column width + 200mm overhang
+- Foundation depth is a parameter (default 1.0m)
+- Column section shows slenderness check, axial capacity check, and moment magnification
+
+---
+
+### 3. Geometry Creation (`truss_builder.py`) — BAMC Legacy
 
 **Functions:**
 - `build_longitudinal_truss(results_map=None)` → `(SystemElements, mapping_dict)`
 - `build_transverse_stiffening_truss(transfer_load_kn, results_map=None)` → `(SystemElements, mapping_dict)`
 - `build_transverse_frame()` → `SystemElements`
 - `get_max_group_forces(system, ids)` → `float` (max absolute axial force in kN)
-
-**Current longitudinal truss geometry:**
-- 16 panels, 18.7m span, 0.6m depth, 1.0m rise (sloped)
-- Bottom chord base elevation: `y_base = 7.2` (sits atop columns)
-- Two fixed-base columns: Left = 7.2m tall, Right = 8.2m tall
-- Loads: `-4.6 kN/m` distributed on top chord (gravity), `3.2 kN/m` lateral on first bottom chord panel
 
 **Pattern for injecting AISC properties:**
 ```python
@@ -176,97 +239,44 @@ def get_props(group_name):
 
 ---
 
-### 3. Iterative Optimization (`optimizer.py`)
+## RC Column Design (NSCP/ACI 318)
 
-**Function**: `run_longitudinal_optimization(target_ltod=240, max_iter=15, chord_family="WT", web_family="L")`
+### Optimization Function: `_optimize_rc_column(pu_kn, col_height_m, fc=21, fy_rebar=275)`
 
-**Optimization sequence:**
-1. Build truss with default stiffness → `solve()` → extract member forces.
-2. **Size chords first** (Top Chord, Bottom Chord) using `select_lightest()`.
-3. **Derive chord flange width** (`bf_chord`) from the narrowest selected chord.
-4. **Size webs with geometric constraint** (`bf_max=bf_chord`). If an `L` shape fails the width or capacity check, **automatically fall back to `2L`** (double angle).
-5. Enter deflection optimization loop:
-   - Rebuild system with current properties → `solve()` → check $L/\delta$.
-   - If deflection fails, step up to the next heaviest chord from the candidate list.
-   - Repeat until $L/\delta \geq$ target or max iterations reached.
-6. **Size columns** from the max vertical support reaction using `W` shapes.
-7. **Compute total truss weight** (kg) and **estimated material cost** (PHP) at a configurable rate.
+**Design Checks:**
+1. **Axial Capacity**: $\phi P_n = 0.80 \times 0.65 \times [0.85 f'_c (A_g - A_{st}) + f_y A_{st}]$ with $A_{st} = 1\% A_g$ minimum
+2. **Slenderness**: $kL_u/r \leq 60$ where $k=1.0$ (braced frame), $r = h/\sqrt{12}$
+   - **Short column**: $kL_u/r \leq 34$ → no magnification needed
+   - **Slender column**: $34 < kL_u/r \leq 60$ → moment magnification required
+3. **Moment Magnification** ($\delta_{ns}$):
+   - $E_c = 4700\sqrt{f'_c}$, $EI_{eff} = 0.4 E_c I_g / (1 + \beta_{dns})$, $\beta_{dns} = 0.6$
+   - $P_c = \pi^2 EI_{eff} / (kL_u)^2$
+   - $e_{min} = \max(15mm, 0.03h)$
+   - $\delta_{ns} = C_m / (1 - P_u / 0.75 P_c)$
 
-**Geometric web constraint logic:**
-```python
-bf_chord = min(top_chord['bf_in'], bottom_chord['bf_in'])
-
-res = aisc_db.select_lightest(p, L, family='L', bf_max=bf_chord)
-if res is None and family == 'L':
-    # Fallback: single angle too wide → use double angle
-    res = aisc_db.select_lightest(p, L, family='2L', bf_max=bf_chord)
-```
-
-**Cost estimation:**
-```python
-for group in truss_groups:
-    weight_lbs = plf * (L_m * 3.28084) * member_count
-    total_weight_kg += weight_lbs * 0.453592
-total_cost_php = total_weight_kg * 60  # PHP/kg rate
-```
+**Reinforcement Selection:**
+| Column Size | Bars | Dia |
+|:---|:---|:---|
+| ≤ 250mm | 4 | 12mm |
+| 250–350mm | 4 | 16mm |
+| > 350mm | 8 | 16mm |
 
 ---
 
-### 4. Markdown Reporting (`report_generator.py`)
+## Footing Design
 
-**Function**: `generate_markdown_report(longitudinal_data, longitudinal_data_2l, frame_data)`
+**Parameters:**
+- `qa`: Allowable soil bearing capacity ($kPa$) — from soil test
+- `foundation_depth`: Foundation depth below grade ($m$)
+- Minimum footing size = column width + 200mm (100mm overhang each side)
+- Minimum footing thickness = 200mm
 
-**Report sections generated:**
-1. **Section 1**: Longitudinal Truss (WT Chords, L Webs) — member table, deflection, plots, weight, cost
-2. **Section 1B**: Alternative Longitudinal Truss (2L Chords) — same format
-3. **Section 1C**: Alternative Concrete Substructure — computed from support reactions:
-   - **Square Column**: Sized by slenderness ($L/h \leq 30$), includes eccentricity moment ($M_u = P_u \times e$)
-   - **Isolated Footing**: Sized by allowable soil bearing pressure (100 kPa)
-   - Material assumptions: $f'_c = 21$ MPa, $f_y = 275$ MPa (Grade 40)
-4. **Section 2**: Transverse Moment Frame — structure, axial, displacement, reaction plots
-
-**Plot generation pattern:**
+**Sizing:**
 ```python
-fig = ss.show_structure(show=False)
-fig.savefig('images/longitudinal_structure.png', dpi=150, bbox_inches='tight')
-plt.close(fig)
+p_service = pu / 1.5
+area_req = p_service / qa
+size = max(min_footing, ceil(sqrt(area_req) * 10) / 10)  # round up to 0.1m
 ```
-
----
-
-### 5. Orchestration (`simulate_full_system.py`)
-
-Clean entry point that calls optimization functions in sequence and passes results to the report generator. Run with: `python simulate_full_system.py`
-
----
-
-## Advanced Result Extraction
-
-### 1. Standardized Reaction Extraction
-When preparing data for foundation design (footings), always extract the full set of reactions ($R_x, R_y, M_z$) from support nodes.
-
-```python
-def get_reactions(ss, node_id):
-    res = ss.get_node_results_system(node_id)
-    if isinstance(res, dict):
-        return {
-            'Rx': abs(res.get('Fx', 0.0)),
-            'Ry': abs(res.get('Fy', 0.0)),
-            'Mz': abs(res.get('Tz', 0.0))
-        }
-    elif isinstance(res, (list, np.ndarray)):
-        return {
-            'Rx': abs(res[0]),
-            'Ry': abs(res[1]),
-            'Mz': abs(res[2])
-        }
-    return {'Rx': 0.0, 'Ry': 0.0, 'Mz': 0.0}
-```
-
-### 2. Deflection & Force Envelopes
-For linear systems with multiple load combinations, the max effect (Envelope) should be used for member selection.
-- **Deflection**: Max vertical displacement at span middle or apex.
-- **Axial/Shear/Moment**: Max absolute values across all elements in a group.
 
 ---
 
@@ -274,20 +284,13 @@ For linear systems with multiple load combinations, the max effect (Envelope) sh
 
 Every structural analysis report MUST follow this logical flow:
 
-1.  **Project Overview**: Frame type, span, spacing, and column height.
-2.  **Structural Assumptions**: Material properties ($F_y, f'_c$) and soil parameters.
-3.  **Loading Data**:
-    - Load Computation (Pressure $\to$ Line Load).
-    - Load Combinations (NSCP/LRFD Cases).
-4.  **Analysis Results**: 
-    - Selected Member Tables (AISC Label, Weight, Capacity Ratio).
-    - Deflection Summary (Max vs Allowable $L/240$).
-5.  **Support Reactions**: Summary table for $R_x, R_y, M_z$.
-6.  **Substructure Design**: Concrete pedestal and isolated footing sizing.
-7.  **Conclusion & Visualizations**:
-    - Structure/Loads Plot.
-    - Axial Force/Moment Diagrams.
-    - Displacement/Reactions Plots.
+1.  **Truss Configuration**: Frame type, span, panels, member families, supports, steel/concrete grades.
+2.  **Applied Loads**: Gravity (DL + LL with tributary width), Earthquake (NSCP static), Wind (pressure × tributary width).
+3.  **Load Case Summary**: Axial forces and reactions per load case with governing envelope.
+4.  **Deflection Check**: Max deflection vs L/240 target.
+5.  **Optimized Member Selection**: Shape, weight, KL/r, governing force, **capacity** (kN), governing LC.
+6.  **Substructure Design**: Column sizing (with slenderness check), footing sizing (with bearing pressure check).
+7.  **Structural Plots**: Structure, axial forces, deflection, reactions for gravity and wind cases.
 
 ---
 
@@ -295,9 +298,15 @@ Every structural analysis report MUST follow this logical flow:
 
 | Problem | Root Cause | Fix |
 | --- | --- | --- |
+| `Capacity (kN)` column is all zeros | `check_shape()` discarded `phi_Pn`; `select_candidates()` never stored `Capacity_kN` | Return 4-tuple from `check_shape()`, store as `Capacity_kN` in candidate dict |
+| Chord family CLI arg ignored | `family='2L'` hardcoded in sizing loop instead of using `d['family']` | Use `d['family']` from `truss_groups` dict |
+| Web family CLI arg ignored | `family='HSS'` hardcoded in web sizing block | Branch on `d['family']`: use rect-pipe filter for `HSS`, `select_lightest` for `L` |
+| Report says "6m trib" after changing to 5m | Tributary width hardcoded in report strings | Pull `trib_width`, `dl_kpa`, `ll_kpa` from data dict, format dynamically |
+| Report shows "Double Angles (2L)" for single angles | Chord/web construction label hardcoded | Detect from `shape['Label']` prefix: `L` → "Single Angles", `HSS` → "Pipe" |
+| `UnicodeEncodeError` with φ/δ in print() | Windows cp1252 console can't encode Greek letters | Use ASCII in `print()` (e.g., `phiPn`); Unicode is fine in Markdown output |
+| `ValueError: not enough values to unpack` | Early-return paths in `check_shape()` still returned 3-tuple after adding 4th value | Update ALL return paths: `return False, 99.0, klr, 0.0` |
+| Column size always 400×400 | Column not optimized — hardcoded in optimizer | Added `_optimize_rc_column()` after Phase 3 with slenderness + capacity checks |
+| Footing always 1.0×1.0m | Minimum footing size hardcoded at 1.0m regardless of load | Reduced minimum to column width + 200mm overhang |
 | `math domain error` in footing calc | Reaction force is negative (downward) | Use `abs()` before `math.sqrt()` |
-| `NameError: avg_reaction_kn` | Variable deleted during refactor | Ensure `avg_reaction_kn = max_react_y` is assigned before `return` |
 | `TypeError` on node results | Node objects vs IDs | Use `nid = node.id if hasattr(node, 'id') else node` |
-| Web member juts out of chord flange | Angle leg wider than WT flange | Pass `bf_max=chord_bf` to `select_lightest()`, fallback to `2L` |
 | Deflection doesn't change after re-solve | Properties set via `element_map` | Rebuild entire `SystemElements` with `add_element(EA=..., EI=...)` |
-| `KeyError` on `element.node_map` | Keys are node IDs, not indices | Use `list(el.node_map.keys())[0]` or `.id` attribute of the node. |

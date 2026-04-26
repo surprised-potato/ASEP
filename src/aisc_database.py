@@ -167,12 +167,12 @@ class AISCDatabase:
         """
         Ag = row['A']
         rmin = row['r_min']
-        if rmin <= 0: return False, 99.0, 999
+        if rmin <= 0: return False, 99.0, 999, 0.0
         klr = L_in / rmin
         
         # Slenderness limits
-        if Pu_kips < 0 and klr > 200: return False, 99.0, klr
-        if Pu_kips >= 0 and klr > 300: return False, 99.0, klr
+        if Pu_kips < 0 and klr > 200: return False, 99.0, klr, 0.0
+        if Pu_kips >= 0 and klr > 300: return False, 99.0, klr, 0.0
         
         # 1. Axial Capacity (phi Pn)
         phi_p = 0.9
@@ -211,7 +211,7 @@ class AISCDatabase:
         else:
             ratio = (pr / 2.0) + mr
             
-        return (ratio <= 1.0), ratio, klr
+        return (ratio <= 1.0), ratio, klr, phi_Pn
 
     def select_candidates(self, Pu_kN, L_m, family='HSS', bf_max=None, Mx_kN_m=0.0, My_kN_m=0.0):
         """Returns a list of all shapes capable of supporting the combined loads, sorted by weight."""
@@ -243,12 +243,14 @@ class AISCDatabase:
             if bf_max is not None and width_in > bf_max:
                 continue
 
-            passes, ratio, klr = self.check_shape(
+            passes, ratio, klr, phi_Pn_kips = self.check_shape(
                 row, Pu_kips, L_in, Fy=36,
                 Mux_kipsft=Mux_kipsft, Muy_kipsft=Muy_kipsft
             )
             
             if passes:
+                # Convert phi_Pn from kips to kN (1 kip = 4.44822 kN)
+                capacity_kN = phi_Pn_kips * 4.44822
                 valid.append({
                     'Label': str(row['AISC_Manual_Label']), 
                     'Weight': float(row['W']), 
@@ -256,6 +258,7 @@ class AISCDatabase:
                     'Ix': float(row['Ix']), 
                     'KL/r': float(klr),
                     'Capacity_Ratio': float(ratio),
+                    'Capacity_kN': float(capacity_kN),
                     'bf_in': float(width_in),
                     'tw_in': float(row['tw']) if row['tw'] > 0 else (row['tdes'] if 'tdes' in row else 0.0)
                 })

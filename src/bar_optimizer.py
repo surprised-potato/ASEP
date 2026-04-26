@@ -13,6 +13,92 @@ from .aisc_database import aisc_db
 import math
 
 
+def _optimize_rc_column(pu_kn, col_height_m, fc=21, fy_rebar=275):
+    """Compute minimum square RC column size for given factored axial load.
+
+    Checks:
+      1. Axial capacity: phi*Pn(max) = 0.80 * phi * [0.85*f'c*(Ag-Ast) + fy*Ast]
+         with phi=0.65 (tied column) and Ast = 1% Ag minimum.
+      2. Slenderness: kLu/r <= 60 (practical upper limit for tied RC columns).
+         k=1.0 (braced frame with tie beams), r = h/sqrt(12).
+
+    Returns a dict with column properties for the truss builder.
+    """
+    phi = 0.65  # Tied column
+    k = 1.0     # Braced frame
+    max_klr = 60  # Practical slenderness limit
+    Ec = 4700 * math.sqrt(fc)  # MPa
+
+    for h_mm in range(200, 600, 50):
+        h_m = h_mm / 1000.0
+        Ag_mm2 = h_mm * h_mm
+
+        # Slenderness check
+        r_m = h_m / math.sqrt(12)
+        kLu_r = k * col_height_m / r_m
+        if kLu_r > max_klr:
+            continue
+
+        # Axial capacity with 1% minimum steel
+        Ast_mm2 = 0.01 * Ag_mm2
+        phi_Pn_N = 0.80 * phi * (0.85 * fc * (Ag_mm2 - Ast_mm2) + fy_rebar * Ast_mm2)
+        phi_Pn_kN = phi_Pn_N / 1000.0
+
+        if phi_Pn_kN >= pu_kn:
+            # Moment magnification check (slender column)
+            Ig_m4 = (h_m ** 4) / 12.0
+            I_eff_m4 = 0.70 * Ig_m4  # Cracked section
+            beta_dns = 0.6  # Sustained load ratio
+            EI_eff = 0.4 * (Ec * 1e6) * Ig_m4 / (1 + beta_dns)  # N·m²
+            Pc_N = (math.pi ** 2) * EI_eff / (k * col_height_m) ** 2
+            Pc_kN = Pc_N / 1000.0
+
+            # Minimum eccentricity moment
+            e_min_m = max(0.015, 0.03 * h_m)
+            M_min_kNm = pu_kn * e_min_m
+
+            # Magnification factor
+            denom = 1 - pu_kn / (0.75 * Pc_kN)
+            delta_ns = max(1.0, 1.0 / denom) if denom > 0 else 99
+            Mc_kNm = delta_ns * M_min_kNm
+
+            # Determine rebar: pick standard bars
+            if h_mm <= 250:
+                n_bars, bar_dia = 4, 12
+            elif h_mm <= 350:
+                n_bars, bar_dia = 4, 16
+            else:
+                n_bars, bar_dia = 8, 16
+            Ast_actual = n_bars * math.pi * (bar_dia / 2) ** 2
+
+            return {
+                'Label': f'{h_mm}x{h_mm} RC',
+                'Type': 'RC',
+                'Area': h_m * h_m,        # m²
+                'Ix': I_eff_m4,            # m⁴ (0.70 Ig)
+                'Weight': h_m * h_m * 2400,  # kg/m
+                'h_mm': h_mm,
+                'kLu_r': kLu_r,
+                'phi_Pn_kN': phi_Pn_kN,
+                'Ast_mm2': Ast_actual,
+                'n_bars': n_bars,
+                'bar_dia': bar_dia,
+                'delta_ns': delta_ns,
+                'Mc_kNm': Mc_kNm,
+                'Pc_kN': Pc_kN,
+            }
+
+    # Fallback to 400x400 if nothing passes
+    h_m = 0.4
+    return {
+        'Label': '400x400 RC', 'Type': 'RC',
+        'Area': 0.16, 'Ix': 0.70 * (0.4**4 / 12), 'Weight': 384,
+        'h_mm': 400, 'kLu_r': k * col_height_m / (0.4 / math.sqrt(12)),
+        'phi_Pn_kN': 0, 'Ast_mm2': 804, 'n_bars': 8, 'bar_dia': 16,
+        'delta_ns': 1.0, 'Mc_kNm': 0, 'Pc_kN': 0,
+    }
+
+
 def run_bar_optimization(target_ltod=240, max_iter=15, chord_family="2L", web_family="L", N=21, has_int_cols=True):
     """Optimizes the 21m Howe truss for a bar roof.
 
@@ -28,10 +114,14 @@ def run_bar_optimization(target_ltod=240, max_iter=15, chord_family="2L", web_fa
     mid_x = span / 2.0
     col_height = 4.0
 
-    # Gravity load breakdown (service loads)
-    dl_q_kn_m = -3.0
-    ll_q_kn_m = -3.6
-    wind_q_kn_m = 4.8
+    # Gravity load breakdown (service loads) — 5m tributary width
+    trib_width = 5.0        # m
+    dl_kpa = 0.5            # kPa
+    ll_kpa = 0.6            # kPa
+    wind_kpa = 0.8          # kPa
+    dl_q_kn_m = -(dl_kpa * trib_width)     # -2.5 kN/m
+    ll_q_kn_m = -(ll_kpa * trib_width)     # -3.0 kN/m
+    wind_q_kn_m = wind_kpa * trib_width    #  4.0 kN/m
 
     # Member lengths for slenderness
     slope_per_panel = rise / (N / 2.0)
@@ -90,18 +180,20 @@ def run_bar_optimization(target_ltod=240, max_iter=15, chord_family="2L", web_fa
         for g in ["Top Chord", "Bottom Chord"]:
             d = truss_groups[g]
             p = get_max_group_forces(ss_curr, d['ids'])
-            new_results[g] = aisc_db.select_lightest(p, d['L'], family='2L')
+            new_results[g] = aisc_db.select_lightest(p, d['L'], family=d['family'])
 
         for g in ["Vertical Webs", "Diagonal Webs"]:
             d = truss_groups[g]
             p = get_max_group_forces(ss_curr, d['ids'])
-            candidates = aisc_db.select_candidates(p, d['L'], family='HSS')
-            rect_candidates = [c for c in candidates if c['Label'].count('X') == 2 and '.' not in c['Label'].split('X')[0]]
-            
-            if rect_candidates:
-                new_results[g] = rect_candidates[0]
+            if d['family'] == 'HSS':
+                candidates = aisc_db.select_candidates(p, d['L'], family='HSS')
+                rect_candidates = [c for c in candidates if c['Label'].count('X') == 2 and '.' not in c['Label'].split('X')[0]]
+                if rect_candidates:
+                    new_results[g] = rect_candidates[0]
+                else:
+                    new_results[g] = candidates[0] if candidates else None
             else:
-                new_results[g] = candidates[0] if candidates else None
+                new_results[g] = aisc_db.select_lightest(p, d['L'], family=d['family'])
         
         for g in ["Top Chord", "Bottom Chord", "Vertical Webs", "Diagonal Webs"]:
             if iteration > 0:
@@ -225,9 +317,18 @@ def run_bar_optimization(target_ltod=240, max_iter=15, chord_family="2L", web_fa
         truss_results[g]['Max_Force_kN'] = governing_forces[g]
         truss_results[g]['Governing_LC'] = governing_lc[g]
     
+    # Optimize RC columns based on governing reactions
+    print("  Optimizing RC column sizes...")
+    ext_col_opt = _optimize_rc_column(gov_react_y_ext, col_height)
+    truss_results["Exterior Columns"] = ext_col_opt
     truss_results["Exterior Columns"].update({'Max_Force_kN': governing_forces["Exterior Columns"], 'Governing_LC': governing_lc["Exterior Columns"]})
+    print(f"    Exterior: {ext_col_opt['Label']} (kLu/r={ext_col_opt['kLu_r']:.1f}, phiPn={ext_col_opt['phi_Pn_kN']:.0f} kN)")
+
     if has_int_cols:
+        int_col_opt = _optimize_rc_column(gov_react_y_int, col_height)
+        truss_results["Interior Columns"] = int_col_opt
         truss_results["Interior Columns"].update({'Max_Force_kN': governing_forces["Interior Columns"], 'Governing_LC': governing_lc["Interior Columns"]})
+        print(f"    Interior: {int_col_opt['Label']} (kLu/r={int_col_opt['kLu_r']:.1f}, phiPn={int_col_opt['phi_Pn_kN']:.0f} kN)")
 
     return {
         "system": lc_results["LC1: Gravity Only"]["system"],
@@ -237,7 +338,8 @@ def run_bar_optimization(target_ltod=240, max_iter=15, chord_family="2L", web_fa
         "load_cases": lc_results, "gov_react_y_ext": gov_react_y_ext, "gov_react_y_int": gov_react_y_int,
         "gov_react_x": gov_react_x, "Cs": Cs, "W_seismic": W_seismic, "V_base_shear": V_base_shear,
         "wind_q_kn_m": wind_q_kn_m, "self_weight_q": self_weight_q, "total_gravity": total_dl_q,
-        "base_gravity": dl_q_kn_m, "live_gravity": ll_q_kn_m,
+        "base_gravity": dl_q_kn_m, "live_gravity": ll_q_kn_m, "trib_width": trib_width,
+        "dl_kpa": dl_kpa, "ll_kpa": ll_kpa, "wind_kpa": wind_kpa,
         "governing_forces": governing_forces, "governing_lc": governing_lc,
         "gov_react_y": max(gov_react_y_ext, gov_react_y_int),
         "has_int_cols": has_int_cols
